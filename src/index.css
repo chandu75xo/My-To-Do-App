@@ -1,0 +1,41 @@
+/*
+  These three lines are Tailwind "directives" — special instructions
+  that tell PostCSS to inject Tailwind's generated CSS here.
+
+  @tailwind base     → resets browser default styles (margins, paddings, etc.)
+  @tailwind components → any reusable component classes you define
+  @tailwind utilities  → all the utility classes like bg-blue-500, p-4, flex, etc.
+*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+  Smooth scrolling for the whole page.
+  scroll-behavior: smooth makes anchor links animate instead of jump.
+*/
+html {
+  scroll-behavior: smooth;
+}
+
+/*
+  Custom scrollbar styling — makes the scrollbar thin and subtle.
+  This only applies in Webkit browsers (Chrome, Safari, Edge).
+*/
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-300 dark:bg-gray-600 rounded-full;
+}
+
+/*
+  Transition for dark mode switch — makes background/text
+  colour changes animate smoothly instead of snapping.
+*/
+body {
+  @apply transition-colors duration-300;
+}

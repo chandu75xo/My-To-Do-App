@@ -1,0 +1,51 @@
+{
+  "_comment": "manifest.json — the PWA identity card",
+  "_what_is_this": "This file tells the browser how to install your app on a phone's home screen. When a user visits your site on mobile and sees 'Add to Home Screen', this file controls what the app looks like after installation.",
+
+  "name": "done. — Personal Todo",
+  "short_name": "done.",
+  "description": "Your personal todo app with reminders and notifications",
+
+  "start_url": "/",
+  "scope": "/",
+
+  "display": "standalone",
+  "_display_note": "standalone = the app opens without browser address bar/tabs, just like a native app. Other options: fullscreen, minimal-ui, browser",
+
+  "orientation": "portrait",
+
+  "theme_color": "#111111",
+  "_theme_color_note": "Colour of the status bar / browser chrome on Android. We use dark to match our app header.",
+
+  "background_color": "#f9fafb",
+  "_background_color_note": "Shown briefly while the app is loading (the splash screen background).",
+
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "_icons_note": "You need to create these icon files. Use any image editor or https://realfavicongenerator.net — upload a square image of the 'done.' wordmark and it generates all sizes.",
+
+  "categories": ["productivity", "utilities"],
+
+  "shortcuts": [
+    {
+      "name": "Add task",
+      "short_name": "Add",
+      "description": "Quickly add a new task",
+      "url": "/?action=add",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ],
+  "_shortcuts_note": "Long-pressing the app icon on Android shows these quick actions."
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!--
+      viewport meta tag: makes the app look correct on mobile phones.
+      Without this, phones zoom out and show a tiny desktop version.
+    -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- PWA: app icon shown on phone home screen (we'll add the actual icon in v3) -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!--
+      Google Fonts — loading 3 fonts:
+      - DM Sans: clean, modern sans-serif for body text
+      - Playfair Display: elegant serif for the "done." logo
+      - JetBrains Mono: monospace for the timer digits
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Playfair+Display:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>done. — your personal todo</title>
+  </head>
+  <body>
+    <!--
+      This single <div id="root"> is where React "mounts" the entire app.
+      React takes over this div and renders everything inside it dynamically.
+      That's why this is called a Single Page Application (SPA) —
+      there's only one HTML file, React handles all the page changes in JavaScript.
+    -->
+    <div id="root"></div>
+
+    <!--
+      This loads your React app. type="module" tells the browser
+      this is modern JavaScript with import/export statements.
+      Vite intercepts this during development and serves the processed files.
+    -->
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
