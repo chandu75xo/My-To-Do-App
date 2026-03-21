@@ -1,18 +1,17 @@
-// App.jsx — UPDATED for v2
-// useTasks now receives `user` so it only fetches after login.
-// AuthScreen receives onLogin for returning users.
-// A loading spinner shows while the JWT token is being verified on mount.
+// App.jsx — UPDATED for v2.2
+// Added: EditTaskModal, editTask wired through, onEdit passed to TaskList
 
 import { useState, useEffect } from 'react'
-import { useAuth }      from './hooks/useAuth'
-import { useTasks }     from './hooks/useTasks'
-import AuthScreen       from './components/AuthScreen'
-import Header           from './components/Header'
-import Sidebar          from './components/Sidebar'
-import ProfileModal     from './components/ProfileModal'
-import TagFilter        from './components/TagFilter'
-import TaskList         from './components/TaskList'
-import TaskForm         from './components/TaskForm'
+import { useAuth }        from './hooks/useAuth'
+import { useTasks }       from './hooks/useTasks'
+import AuthScreen         from './components/AuthScreen'
+import Header             from './components/Header'
+import Sidebar            from './components/Sidebar'
+import ProfileModal       from './components/ProfileModal'
+import TagFilter          from './components/TagFilter'
+import TaskList           from './components/TaskList'
+import TaskForm           from './components/TaskForm'
+import EditTaskModal      from './components/EditTaskModal'
 
 export default function App() {
   const { user, loading: authLoading, saveUser, loginUser, clearUser } = useAuth()
@@ -31,37 +30,36 @@ export default function App() {
   const [profileOpen, setProfileOpen] = useState(false)
   const [formOpen,    setFormOpen]    = useState(false)
   const [activeTag,   setActiveTag]   = useState('all')
+  const [editingTask, setEditingTask] = useState(null)
 
-  const { tasks, loading: tasksLoading, addTask, toggleTask, toggleImportant, deleteTask, clearCompleted } = useTasks(user)
+  const {
+    tasks, loading: tasksLoading,
+    addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted
+  } = useTasks(user)
 
-  // While verifying JWT token on startup — show a minimal spinner
-  if (authLoading) {
-    return (
-      <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
-        <div className="text-center">
-          <p className="font-serif text-3xl text-gray-900 dark:text-white mb-4">done.</p>
-          <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin mx-auto"/>
-        </div>
+  if (authLoading) return (
+    <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
+      <div className="text-center">
+        <p className="font-serif text-3xl text-gray-900 dark:text-white mb-4">done.</p>
+        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin mx-auto"/>
       </div>
-    )
-  }
+    </div>
+  )
 
-  if (!user) {
-    return (
-      <div className={darkMode ? 'dark' : ''}>
-        <AuthScreen onSave={saveUser} onLogin={loginUser} />
-      </div>
-    )
-  }
+  if (!user) return (
+    <div className={darkMode ? 'dark' : ''}>
+      <AuthScreen onSave={saveUser} onLogin={loginUser}/>
+    </div>
+  )
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 font-sans">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}
         darkMode={darkMode} setDarkMode={setDarkMode} user={user}
-        onSignOut={() => { setSidebarOpen(false); clearUser() }} />
+        onSignOut={() => { setSidebarOpen(false); clearUser() }}/>
 
-      <Header user={user} onMenuOpen={() => setSidebarOpen(true)} onProfileOpen={() => setProfileOpen(true)} />
-      <TagFilter activeTag={activeTag} setActiveTag={setActiveTag} />
+      <Header user={user} onMenuOpen={() => setSidebarOpen(true)} onProfileOpen={() => setProfileOpen(true)}/>
+      <TagFilter activeTag={activeTag} setActiveTag={setActiveTag}/>
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-28">
         {tasksLoading ? (
@@ -69,8 +67,10 @@ export default function App() {
             <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin"/>
           </div>
         ) : (
-          <TaskList tasks={tasks} activeTag={activeTag} onToggle={toggleTask}
-            onDelete={deleteTask} onToggleImportant={toggleImportant} onClearCompleted={clearCompleted} />
+          <TaskList tasks={tasks} activeTag={activeTag}
+            onToggle={toggleTask} onDelete={deleteTask}
+            onToggleImportant={toggleImportant} onClearCompleted={clearCompleted}
+            onEdit={(task) => setEditingTask(task)}/>
         )}
       </main>
 
@@ -79,8 +79,9 @@ export default function App() {
         +
       </button>
 
-      <TaskForm onAdd={addTask} isOpen={formOpen} onClose={() => setFormOpen(false)} />
-      <ProfileModal isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} onSave={saveUser} />
+      <TaskForm    onAdd={addTask}    isOpen={formOpen}          onClose={() => setFormOpen(false)}/>
+      <EditTaskModal task={editingTask} isOpen={!!editingTask}   onClose={() => setEditingTask(null)} onSave={editTask}/>
+      <ProfileModal  isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} onSave={saveUser}/>
     </div>
   )
 }

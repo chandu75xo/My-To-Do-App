@@ -115,8 +115,22 @@ export function useTasks(user) {
     }
   }, [tasks])
 
-  return { tasks, loading, error, addTask, toggleTask, toggleImportant, deleteTask, clearCompleted }
+  const editTask = useCallback(async (id, fields) => {
+    const prev = tasks
+    setTasks(p => p.map(t => t.id === id ? { ...t, ...fields } : t))
+    try {
+      await tasksApi.update(id, fields)
+    } catch (err) {
+      setTasks(prev)
+      setError(err.message)
+    }
+  }, [tasks])
+
+  return { tasks, loading, error, addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted }
 }
 
 // Note: useTasks already passes all task fields including dueDate to the API.
 // No changes needed here — dueDate flows through addTask/update naturally.
+
+// editTask — update multiple fields at once
+// Already exported via the return object below — add it there
