@@ -1,87 +1,185 @@
-// App.jsx — UPDATED for v2.2
-// Added: EditTaskModal, editTask wired through, onEdit passed to TaskList
-
 import { useState, useEffect } from 'react'
 import { useAuth }        from './hooks/useAuth'
 import { useTasks }       from './hooks/useTasks'
+import { usePush }        from './hooks/usePush'
+import { useSettings }    from './hooks/useSettings'
 import AuthScreen         from './components/AuthScreen'
+import NotificationPrompt from './components/NotificationPrompt'
 import Header             from './components/Header'
 import Sidebar            from './components/Sidebar'
 import ProfileModal       from './components/ProfileModal'
+import SettingsModal      from './components/SettingsModal'
 import TagFilter          from './components/TagFilter'
 import TaskList           from './components/TaskList'
 import TaskForm           from './components/TaskForm'
 import EditTaskModal      from './components/EditTaskModal'
+import PushToast          from './components/PushToast'
+
+const NOTIF_KEY = 'done-notif-prompted'
 
 export default function App() {
+  // ── Core hooks ────────────────────────────────────────────────────────────
   const { user, loading: authLoading, saveUser, loginUser, clearUser } = useAuth()
+  const { settings, updateSetting } = useSettings()
 
+  // ── Dark mode ─────────────────────────────────────────────────────────────
   const [darkMode, setDarkMode] = useState(() => {
-    const saved = localStorage.getItem('done-darkmode')
-    if (saved !== null) return saved === 'true'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
+    try {
+      const s = localStorage.getItem('done-darkmode')
+      if (s !== null) return s === 'true'
+    } catch {}
+    return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
   })
   useEffect(() => {
     document.documentElement.classList.toggle('dark', darkMode)
-    localStorage.setItem('done-darkmode', darkMode)
+    localStorage.setItem('done-darkmode', String(darkMode))
   }, [darkMode])
 
-  const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [profileOpen, setProfileOpen] = useState(false)
-  const [formOpen,    setFormOpen]    = useState(false)
-  const [activeTag,   setActiveTag]   = useState('all')
-  const [editingTask, setEditingTask] = useState(null)
+  // ── Notification prompt (shown once after first login) ────────────────────
+  const [showNotifPrompt, setShowNotifPrompt] = useState(false)
+  useEffect(() => {
+    if (user && !localStorage.getItem(NOTIF_KEY)) {
+      setShowNotifPrompt(true)
+    }
+  }, [user])
 
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [sidebarOpen,  setSidebarOpen]  = useState(false)
+  const [profileOpen,  setProfileOpen]  = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const [formOpen,     setFormOpen]     = useState(false)
+  const [activeTag,    setActiveTag]    = useState('all')
+  const [editingTask,  setEditingTask]  = useState(null)
+
+  // ── Data hooks ────────────────────────────────────────────────────────────
   const {
     tasks, loading: tasksLoading,
     addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted
   } = useTasks(user)
 
+  const {
+    permission, isSupported,
+    requestPermission, unsubscribe,
+    sendTestPush, testStatus,
+  } = usePush(user)
+
+  // ── Notification prompt handlers ──────────────────────────────────────────
+  const handleAllow = async () => {
+    localStorage.setItem(NOTIF_KEY, 'true')
+    setShowNotifPrompt(false)
+    await requestPermission()
+  }
+  const handleDecline = () => {
+    localStorage.setItem(NOTIF_KEY, 'true')
+    setShowNotifPrompt(false)
+  }
+
+  // ── Render: loading ───────────────────────────────────────────────────────
   if (authLoading) return (
     <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
       <div className="text-center">
         <p className="font-serif text-3xl text-gray-900 dark:text-white mb-4">done.</p>
-        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin mx-auto"/>
+        <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin mx-auto" />
       </div>
     </div>
   )
 
+  // ── Render: auth ──────────────────────────────────────────────────────────
   if (!user) return (
     <div className={darkMode ? 'dark' : ''}>
-      <AuthScreen onSave={saveUser} onLogin={loginUser}/>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+        <AuthScreen onSave={saveUser} onLogin={loginUser} />
+      </div>
     </div>
   )
 
+  // ── Render: notification prompt ───────────────────────────────────────────
+  if (showNotifPrompt) return (
+    <div className={darkMode ? 'dark' : ''}>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+        <NotificationPrompt onAllow={handleAllow} onDecline={handleDecline} />
+      </div>
+    </div>
+  )
+
+  // ── Render: main app ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 font-sans">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}
-        darkMode={darkMode} setDarkMode={setDarkMode} user={user}
-        onSignOut={() => { setSidebarOpen(false); clearUser() }}/>
 
-      <Header user={user} onMenuOpen={() => setSidebarOpen(true)} onProfileOpen={() => setProfileOpen(true)}/>
-      <TagFilter activeTag={activeTag} setActiveTag={setActiveTag}/>
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        darkMode={darkMode}
+        setDarkMode={setDarkMode}
+        user={user}
+        permission={permission}
+        isSupported={isSupported}
+        onEnableNotifications={requestPermission}
+        onDisableNotifications={unsubscribe}
+        onTestPush={sendTestPush}
+        testStatus={testStatus}
+        onOpenSettings={() => { setSidebarOpen(false); setSettingsOpen(true) }}
+        onSignOut={() => { setSidebarOpen(false); clearUser() }}
+      />
+
+      <Header
+        user={user}
+        onMenuOpen={() => setSidebarOpen(true)}
+        onProfileOpen={() => setProfileOpen(true)}
+      />
+
+      <TagFilter activeTag={activeTag} setActiveTag={setActiveTag} />
 
       <main className="max-w-2xl mx-auto px-4 py-6 pb-28">
         {tasksLoading ? (
           <div className="flex items-center justify-center py-16">
-            <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin"/>
+            <div className="w-5 h-5 border-2 border-gray-300 dark:border-gray-600 border-t-gray-900 dark:border-t-white rounded-full animate-spin" />
           </div>
         ) : (
-          <TaskList tasks={tasks} activeTag={activeTag}
-            onToggle={toggleTask} onDelete={deleteTask}
-            onToggleImportant={toggleImportant} onClearCompleted={clearCompleted}
-            onEdit={(task) => setEditingTask(task)}/>
+          <TaskList
+            tasks={tasks}
+            activeTag={activeTag}
+            onToggle={toggleTask}
+            onDelete={deleteTask}
+            onToggleImportant={toggleImportant}
+            onClearCompleted={clearCompleted}
+            onEdit={setEditingTask}
+            timeFormat={settings.timeFormat}
+          />
         )}
       </main>
 
-      <button onClick={() => setFormOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center text-2xl font-light z-10">
+      <button
+        onClick={() => setFormOpen(true)}
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center text-2xl font-light z-10"
+      >
         +
       </button>
 
-      <TaskForm    onAdd={addTask}    isOpen={formOpen}          onClose={() => setFormOpen(false)}/>
-      <EditTaskModal task={editingTask} isOpen={!!editingTask}   onClose={() => setEditingTask(null)} onSave={editTask}/>
-      <ProfileModal  isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} onSave={saveUser}/>
+      <TaskForm
+        onAdd={addTask}
+        isOpen={formOpen}
+        onClose={() => setFormOpen(false)}
+      />
+      <EditTaskModal
+        task={editingTask}
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        onSave={editTask}
+      />
+      <ProfileModal
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        user={user}
+        onSave={saveUser}
+      />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onUpdate={updateSetting}
+      />
+      <PushToast />
     </div>
   )
 }

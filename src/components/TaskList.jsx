@@ -23,7 +23,7 @@ const SECTIONS = [
   { key: 'completed', label: 'Completed', labelClass: 'text-gray-400 dark:text-gray-500' },
 ]
 
-export default function TaskList({ tasks, activeTag, onToggle, onDelete, onToggleImportant, onClearCompleted, onEdit }) {
+export default function TaskList({ tasks, activeTag, onToggle, onDelete, onToggleImportant, onClearCompleted, onEdit, timeFormat }) {
   const filtered = activeTag === 'all' ? tasks : tasks.filter(t => t.tag === activeTag)
   if (filtered.length === 0) return (
     <div className="text-center py-16">
@@ -53,8 +53,10 @@ export default function TaskList({ tasks, activeTag, onToggle, onDelete, onToggl
             </div>
             <div className="space-y-2">
               {items.map(task => (
-                <TaskCard key={task.id} task={task} onToggle={onToggle} onDelete={onDelete}
-                  onToggleImportant={onToggleImportant} onEdit={onEdit}/>
+                <TaskCard key={task.id} task={task}
+                  onToggle={onToggle} onDelete={onDelete}
+                  onToggleImportant={onToggleImportant} onEdit={onEdit}
+                  timeFormat={timeFormat}/>
               ))}
             </div>
           </section>

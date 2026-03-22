@@ -1,15 +1,3 @@
-// hooks/useTasks.js — UPDATED for v2
-//
-// All task operations now go through the Flask API.
-// localStorage is no longer the source of truth — the database is.
-// We keep a local `tasks` state as a cache so the UI stays fast.
-//
-// Pattern used: Optimistic updates.
-// Instead of waiting for the server to confirm before updating the UI,
-// we update the UI instantly, then send the request to Flask.
-// If Flask returns an error, we revert the UI change.
-// This makes the app feel instant even on slow connections.
-
 import { useState, useEffect, useCallback } from 'react'
 import { tasksApi } from '../services/api'
 
@@ -40,42 +28,46 @@ export function useTasks(user) {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
 
-  // Fetch tasks from Flask when the user is available
   useEffect(() => {
     if (!user) return
     setLoading(true)
     tasksApi.getAll()
       .then(data => setTasks(data.tasks))
-      .catch(err => setError(err.message))
-      .finally(()  => setLoading(false))
+      .catch(err  => setError(err.message))
+      .finally(() => setLoading(false))
   }, [user])
 
   const addTask = useCallback(async (taskData) => {
-    // Optimistic: add a temporary task immediately so UI feels instant
     const tempId   = `temp-${Date.now()}`
     const tempTask = { id: tempId, ...taskData, done: false, createdAt: new Date().toISOString() }
     setTasks(prev => [tempTask, ...prev])
-
     try {
       const data = await tasksApi.create(taskData)
-      // Replace the temp task with the real one from the server (which has a real id)
       setTasks(prev => prev.map(t => t.id === tempId ? data.task : t))
     } catch (err) {
-      // Revert on error
       setTasks(prev => prev.filter(t => t.id !== tempId))
       setError(err.message)
     }
   }, [])
 
+  const editTask = useCallback(async (id, fields) => {
+    const prev = tasks
+    setTasks(p => p.map(t => t.id === id ? { ...t, ...fields } : t))
+    try {
+      await tasksApi.update(id, fields)
+    } catch (err) {
+      setTasks(prev)
+      setError(err.message)
+    }
+  }, [tasks])
+
   const toggleTask = useCallback(async (id) => {
     const task = tasks.find(t => t.id === id)
     if (!task) return
-    // Optimistic flip
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
     try {
       await tasksApi.update(id, { done: !task.done })
     } catch (err) {
-      // Revert
       setTasks(prev => prev.map(t => t.id === id ? { ...t, done: task.done } : t))
       setError(err.message)
     }
@@ -115,22 +107,5 @@ export function useTasks(user) {
     }
   }, [tasks])
 
-  const editTask = useCallback(async (id, fields) => {
-    const prev = tasks
-    setTasks(p => p.map(t => t.id === id ? { ...t, ...fields } : t))
-    try {
-      await tasksApi.update(id, fields)
-    } catch (err) {
-      setTasks(prev)
-      setError(err.message)
-    }
-  }, [tasks])
-
   return { tasks, loading, error, addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted }
 }
-
-// Note: useTasks already passes all task fields including dueDate to the API.
-// No changes needed here — dueDate flows through addTask/update naturally.
-
-// editTask — update multiple fields at once
-// Already exported via the return object below — add it there

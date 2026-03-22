@@ -17,7 +17,7 @@ export default function Header({ onMenuOpen, onProfileOpen, user }) {
 
   return (
     <header className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
-      <div className="max-w-2xl mx-auto px-4 py-3 flex items-center gap-3">
+      <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
 
         {/* ── Left: Hamburger ───────────────────────────────────── */}
         <button
@@ -33,14 +33,14 @@ export default function Header({ onMenuOpen, onProfileOpen, user }) {
         {/* ── Centre: Greeting + date ───────────────────────────── */}
         <div className="flex-1 min-w-0">
           {user ? (
-            <p className="text-sm font-medium text-gray-900 dark:text-white truncate">
+            <p className="text-base font-semibold text-gray-900 dark:text-white truncate leading-tight">
               {greeting},{' '}
               <span className="text-gray-500 dark:text-gray-400">{displayName}</span>
             </p>
           ) : (
-            <p className="font-serif text-xl text-gray-900 dark:text-white">done.</p>
+            <p className="font-serif text-2xl text-gray-900 dark:text-white">done.</p>
           )}
-          <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
+          <p className="text-sm text-gray-400 dark:text-gray-500 mt-0.5">
             {new Date().toLocaleDateString('en-US', {
               weekday: 'long', month: 'long', day: 'numeric',
             })}

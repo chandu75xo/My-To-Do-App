@@ -1,22 +1,3 @@
-# requirements.txt
-#
-# This is Python's equivalent of package.json — it lists every library your
-# app needs. Install all of them in one command:
-#   pip install -r requirements.txt
-#
-# What each package does:
-#
-# flask              → the web framework itself. Handles routing, requests, responses.
-# flask-sqlalchemy   → connects Flask to a database using Python objects (no raw SQL needed)
-# flask-jwt-extended → adds JWT token auth to Flask (login system)
-# flask-cors         → lets your React app (localhost:5173) talk to Flask (localhost:5000)
-#                      without the browser blocking it. CORS = Cross-Origin Resource Sharing.
-# flask-mail         → sends emails through Gmail (or any SMTP server)
-# python-dotenv      → reads your .env file so secrets don't end up in code
-# werkzeug           → comes with Flask — we use it to hash passwords safely
-# apscheduler        → runs background jobs on a schedule (checks for reminders every minute)
-# pymysql            → MySQL driver — needed when we switch from SQLite to MySQL in production
-
 flask==3.0.2
 flask-sqlalchemy==3.1.1
 flask-jwt-extended==4.6.0
@@ -26,3 +7,5 @@ python-dotenv==1.0.1
 werkzeug==3.0.1
 apscheduler==3.10.4
 pymysql==1.1.0
+pywebpush==1.14.0
+cryptography==42.0.5
