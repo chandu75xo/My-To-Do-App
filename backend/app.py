@@ -1,5 +1,6 @@
-# app.py — UPDATED for production deployment
-# Works both locally (python app.py) and on Render.com (gunicorn)
+# app.py — FIXED for production
+# Scheduler is now started by gunicorn's post_fork hook (in gunicorn.conf.py)
+# NOT here at module level — that was causing multiple schedulers + worker timeouts
 
 import os
 from flask import Flask
@@ -20,13 +21,11 @@ def create_app():
     mail.init_app(app)
     JWTManager(app)
 
-    # Allow both local dev and production frontend URLs
     allowed_origins = [
         'http://localhost:5173',
         'http://localhost:4173',
-        os.getenv('FRONTEND_URL', ''),  # set this to your Netlify URL on Render
+        os.getenv('FRONTEND_URL', ''),
     ]
-    # Filter out empty strings
     allowed_origins = [o for o in allowed_origins if o]
 
     CORS(app, origins=allowed_origins, supports_credentials=True)
@@ -46,16 +45,13 @@ def create_app():
     return app
 
 
-# Create the app at module level so gunicorn can find it
-# gunicorn looks for a variable named 'app' in this file
+# Module-level app for gunicorn to find
 app = create_app()
 
-# Start the scheduler — works for both gunicorn and direct python app.py
-from services.reminder import start_scheduler
-start_scheduler(app)
-
 if __name__ == '__main__':
-    # Only used when running locally with: python app.py
+    # Local dev only — gunicorn does NOT use this block
+    from services.reminder import start_scheduler
+    start_scheduler(app)
     app.run(
         host  = '0.0.0.0',
         port  = int(os.getenv('PORT', 5000)),
