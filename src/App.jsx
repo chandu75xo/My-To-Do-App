@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect }  from 'react'
 import { useAuth }        from './hooks/useAuth'
 import { useTasks }       from './hooks/useTasks'
 import { usePush }        from './hooks/usePush'
 import { useSettings }    from './hooks/useSettings'
+import { useDueAlarm }    from './hooks/useDueAlarm'
 import AuthScreen         from './components/AuthScreen'
 import NotificationPrompt from './components/NotificationPrompt'
 import Header             from './components/Header'
@@ -14,15 +15,14 @@ import TaskList           from './components/TaskList'
 import TaskForm           from './components/TaskForm'
 import EditTaskModal      from './components/EditTaskModal'
 import PushToast          from './components/PushToast'
+import AlarmModal         from './components/AlarmModal'
 
 const NOTIF_KEY = 'done-notif-prompted'
 
 export default function App() {
-  // ── Core hooks ────────────────────────────────────────────────────────────
   const { user, loading: authLoading, saveUser, loginUser, clearUser } = useAuth()
   const { settings, updateSetting } = useSettings()
 
-  // ── Dark mode ─────────────────────────────────────────────────────────────
   const [darkMode, setDarkMode] = useState(() => {
     try {
       const s = localStorage.getItem('done-darkmode')
@@ -35,15 +35,11 @@ export default function App() {
     localStorage.setItem('done-darkmode', String(darkMode))
   }, [darkMode])
 
-  // ── Notification prompt (shown once after first login) ────────────────────
   const [showNotifPrompt, setShowNotifPrompt] = useState(false)
   useEffect(() => {
-    if (user && !localStorage.getItem(NOTIF_KEY)) {
-      setShowNotifPrompt(true)
-    }
+    if (user && !localStorage.getItem(NOTIF_KEY)) setShowNotifPrompt(true)
   }, [user])
 
-  // ── UI state ──────────────────────────────────────────────────────────────
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [profileOpen,  setProfileOpen]  = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -51,7 +47,6 @@ export default function App() {
   const [activeTag,    setActiveTag]    = useState('all')
   const [editingTask,  setEditingTask]  = useState(null)
 
-  // ── Data hooks ────────────────────────────────────────────────────────────
   const {
     tasks, loading: tasksLoading,
     addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted
@@ -63,7 +58,9 @@ export default function App() {
     sendTestPush, testStatus,
   } = usePush(user)
 
-  // ── Notification prompt handlers ──────────────────────────────────────────
+  // Alarm — fires at exact due time, returns modal state
+  const { alarmTask, handleDismiss, handleSnooze } = useDueAlarm(tasks, settings)
+
   const handleAllow = async () => {
     localStorage.setItem(NOTIF_KEY, 'true')
     setShowNotifPrompt(false)
@@ -74,7 +71,6 @@ export default function App() {
     setShowNotifPrompt(false)
   }
 
-  // ── Render: loading ───────────────────────────────────────────────────────
   if (authLoading) return (
     <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
       <div className="text-center">
@@ -84,7 +80,6 @@ export default function App() {
     </div>
   )
 
-  // ── Render: auth ──────────────────────────────────────────────────────────
   if (!user) return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
@@ -93,7 +88,6 @@ export default function App() {
     </div>
   )
 
-  // ── Render: notification prompt ───────────────────────────────────────────
   if (showNotifPrompt) return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
@@ -102,10 +96,8 @@ export default function App() {
     </div>
   )
 
-  // ── Render: main app ──────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 font-sans">
-
       <Sidebar
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
@@ -151,34 +143,23 @@ export default function App() {
 
       <button
         onClick={() => setFormOpen(true)}
-        className="fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center text-2xl font-light z-10"
-      >
+        className="fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center text-2xl font-light z-10">
         +
       </button>
 
-      <TaskForm
-        onAdd={addTask}
-        isOpen={formOpen}
-        onClose={() => setFormOpen(false)}
+      <TaskForm      onAdd={addTask}    isOpen={formOpen}      onClose={() => setFormOpen(false)} />
+      <EditTaskModal task={editingTask} isOpen={!!editingTask} onClose={() => setEditingTask(null)} onSave={editTask} />
+      <ProfileModal  isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} onSave={saveUser} />
+      <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onUpdate={updateSetting} />
+
+      {/* Alarm modal — appears when a task is due */}
+      <AlarmModal
+        task={alarmTask}
+        snoozeMinutes={settings.snoozeMinutes}
+        onDismiss={handleDismiss}
+        onSnooze={handleSnooze}
       />
-      <EditTaskModal
-        task={editingTask}
-        isOpen={!!editingTask}
-        onClose={() => setEditingTask(null)}
-        onSave={editTask}
-      />
-      <ProfileModal
-        isOpen={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        user={user}
-        onSave={saveUser}
-      />
-      <SettingsModal
-        isOpen={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        settings={settings}
-        onUpdate={updateSetting}
-      />
+
       <PushToast />
     </div>
   )

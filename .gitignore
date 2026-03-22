@@ -15,7 +15,7 @@ backend/*.sqlite3
 # ── Secrets — NEVER commit these ─────────────────────────────
 backend/.env
 .env
-node_modules/
+
 # ── OS files ──────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
