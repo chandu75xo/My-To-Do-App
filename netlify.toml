@@ -1,0 +1,18 @@
+# netlify.toml
+# Tells Netlify how to build and serve the React app.
+# Lives in the root todo-app/ folder.
+
+[build]
+  # Where the source code is (root of the repo)
+  base    = "."
+  # Command to build the production bundle
+  command = "npm run build"
+  # Where Vite puts the built files
+  publish = "dist"
+
+# SPA redirect — ALL routes point to index.html
+# Without this, refreshing on /tasks or any sub-route gives a 404
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200

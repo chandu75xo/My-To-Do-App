@@ -1,3 +1,6 @@
+# app.py — UPDATED for production deployment
+# Works both locally (python app.py) and on Render.com (gunicorn)
+
 import os
 from flask import Flask
 from flask_jwt_extended import JWTManager
@@ -17,13 +20,18 @@ def create_app():
     mail.init_app(app)
     JWTManager(app)
 
-    CORS(app, origins=[
+    # Allow both local dev and production frontend URLs
+    allowed_origins = [
         'http://localhost:5173',
         'http://localhost:4173',
-        os.getenv('FRONTEND_URL', ''),
-    ])
+        os.getenv('FRONTEND_URL', ''),  # set this to your Netlify URL on Render
+    ]
+    # Filter out empty strings
+    allowed_origins = [o for o in allowed_origins if o]
 
-    app.register_blueprint(auth_bp, url_prefix='/api/auth')
+    CORS(app, origins=allowed_origins, supports_credentials=True)
+
+    app.register_blueprint(auth_bp,  url_prefix='/api/auth')
     app.register_blueprint(tasks_bp, url_prefix='/api/tasks')
     app.register_blueprint(push_bp,  url_prefix='/api/push')
 
@@ -38,10 +46,16 @@ def create_app():
     return app
 
 
+# Create the app at module level so gunicorn can find it
+# gunicorn looks for a variable named 'app' in this file
+app = create_app()
+
+# Start the scheduler — works for both gunicorn and direct python app.py
+from services.reminder import start_scheduler
+start_scheduler(app)
+
 if __name__ == '__main__':
-    app = create_app()
-    from services.reminder import start_scheduler
-    start_scheduler(app)
+    # Only used when running locally with: python app.py
     app.run(
         host  = '0.0.0.0',
         port  = int(os.getenv('PORT', 5000)),

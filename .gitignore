@@ -1,9 +1,14 @@
-# ── Node / React ─────────────────────────────────────────────
+# ── Node / React ──────────────────────────────────────────────
 node_modules/
 dist/
 .vite/
 
-# ── Python / Flask ────────────────────────────────────────────
+# ── Frontend env (contains API URLs — keep local) ─────────────
+.env
+.env.local
+.env.production
+
+# ── Python / Flask ─────────────────────────────────────────────
 backend/venv/
 backend/__pycache__/
 backend/**/__pycache__/
@@ -12,14 +17,13 @@ backend/instance/
 backend/*.db
 backend/*.sqlite3
 
-# ── Secrets — NEVER commit these ─────────────────────────────
+# ── Secrets ────────────────────────────────────────────────────
 backend/.env
-.env
 
-# ── OS files ──────────────────────────────────────────────────
+# ── OS ─────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 
-# ── VS Code ───────────────────────────────────────────────────
+# ── VS Code ────────────────────────────────────────────────────
 .vscode/settings.json
 .vscode/launch.json

@@ -19,7 +19,6 @@ __pycache__/
 venv/
 .venv/
 env/
-node_modules/
 
 # OS files
 .DS_Store
