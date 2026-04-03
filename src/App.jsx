@@ -4,6 +4,7 @@ import { useTasks }       from './hooks/useTasks'
 import { usePush }        from './hooks/usePush'
 import { useSettings }    from './hooks/useSettings'
 import { useDueAlarm }    from './hooks/useDueAlarm'
+import SplashScreen       from './components/SplashScreen'
 import AuthScreen         from './components/AuthScreen'
 import NotificationPrompt from './components/NotificationPrompt'
 import Header             from './components/Header'
@@ -17,11 +18,22 @@ import EditTaskModal      from './components/EditTaskModal'
 import PushToast          from './components/PushToast'
 import AlarmModal         from './components/AlarmModal'
 
-const NOTIF_KEY = 'done-notif-prompted'
+const NOTIF_KEY   = 'done-notif-prompted'
+const SPLASH_KEY  = 'done-splash-shown'
 
 export default function App() {
   const { user, loading: authLoading, saveUser, loginUser, clearUser } = useAuth()
   const { settings, updateSetting } = useSettings()
+
+  // Show splash once per session (not on every page reload, just first visit)
+  const [showSplash, setShowSplash] = useState(() => {
+    return !sessionStorage.getItem(SPLASH_KEY)
+  })
+
+  const handleSplashDone = () => {
+    sessionStorage.setItem(SPLASH_KEY, 'true')
+    setShowSplash(false)
+  }
 
   const [darkMode, setDarkMode] = useState(() => {
     try {
@@ -58,7 +70,6 @@ export default function App() {
     sendTestPush, testStatus,
   } = usePush(user)
 
-  // Alarm — fires at exact due time, returns modal state
   const { alarmTask, handleDismiss, handleSnooze } = useDueAlarm(tasks, settings)
 
   const handleAllow = async () => {
@@ -71,6 +82,14 @@ export default function App() {
     setShowNotifPrompt(false)
   }
 
+  // ── Splash screen (shown once per session) ──────────────────────────────
+  if (showSplash) return (
+    <div className={darkMode ? 'dark' : ''}>
+      <SplashScreen onDone={handleSplashDone} />
+    </div>
+  )
+
+  // ── Auth loading ────────────────────────────────────────────────────────
   if (authLoading) return (
     <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
       <div className="text-center">
@@ -80,6 +99,7 @@ export default function App() {
     </div>
   )
 
+  // ── Auth screen ─────────────────────────────────────────────────────────
   if (!user) return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
@@ -88,6 +108,7 @@ export default function App() {
     </div>
   )
 
+  // ── Notification prompt ─────────────────────────────────────────────────
   if (showNotifPrompt) return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
@@ -96,20 +117,16 @@ export default function App() {
     </div>
   )
 
+  // ── Main app ────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 font-sans">
       <Sidebar
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
-        darkMode={darkMode}
-        setDarkMode={setDarkMode}
-        user={user}
-        permission={permission}
-        isSupported={isSupported}
+        isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}
+        darkMode={darkMode} setDarkMode={setDarkMode} user={user}
+        permission={permission} isSupported={isSupported}
         onEnableNotifications={requestPermission}
         onDisableNotifications={unsubscribe}
-        onTestPush={sendTestPush}
-        testStatus={testStatus}
+        onTestPush={sendTestPush} testStatus={testStatus}
         onOpenSettings={() => { setSidebarOpen(false); setSettingsOpen(true) }}
         onSignOut={() => { setSidebarOpen(false); clearUser() }}
       />
@@ -129,20 +146,15 @@ export default function App() {
           </div>
         ) : (
           <TaskList
-            tasks={tasks}
-            activeTag={activeTag}
-            onToggle={toggleTask}
-            onDelete={deleteTask}
-            onToggleImportant={toggleImportant}
-            onClearCompleted={clearCompleted}
-            onEdit={setEditingTask}
-            timeFormat={settings.timeFormat}
+            tasks={tasks} activeTag={activeTag}
+            onToggle={toggleTask} onDelete={deleteTask}
+            onToggleImportant={toggleImportant} onClearCompleted={clearCompleted}
+            onEdit={setEditingTask} timeFormat={settings.timeFormat}
           />
         )}
       </main>
 
-      <button
-        onClick={() => setFormOpen(true)}
+      <button onClick={() => setFormOpen(true)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center text-2xl font-light z-10">
         +
       </button>
@@ -151,15 +163,7 @@ export default function App() {
       <EditTaskModal task={editingTask} isOpen={!!editingTask} onClose={() => setEditingTask(null)} onSave={editTask} />
       <ProfileModal  isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} onSave={saveUser} />
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onUpdate={updateSetting} />
-
-      {/* Alarm modal — appears when a task is due */}
-      <AlarmModal
-        task={alarmTask}
-        snoozeMinutes={settings.snoozeMinutes}
-        onDismiss={handleDismiss}
-        onSnooze={handleSnooze}
-      />
-
+      <AlarmModal    task={alarmTask} snoozeMinutes={settings.snoozeMinutes} onDismiss={handleDismiss} onSnooze={handleSnooze} />
       <PushToast />
     </div>
   )
