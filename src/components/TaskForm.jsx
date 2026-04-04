@@ -1,4 +1,4 @@
-// TaskForm.jsx — v5: added recurrence picker
+// TaskForm.jsx — v5: added notes field, clock defaults to current time
 
 import { useState } from 'react'
 import { TAGS, TASK_TEMPLATES, PRIORITIES, RECURRENCE_OPTIONS } from '../hooks/useTasks'
@@ -7,7 +7,6 @@ import ClockPicker from './ClockPicker'
 const toDateStr   = (d) => d.toISOString().split('T')[0]
 const todayStr    = () => toDateStr(new Date())
 const tomorrowStr = () => { const d = new Date(); d.setDate(d.getDate()+1); return toDateStr(d) }
-
 const dateSummary = (s) => {
   if (!s) return null
   if (s === todayStr())    return 'Today'
@@ -15,8 +14,15 @@ const dateSummary = (s) => {
   return new Date(s + 'T00:00:00').toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric' })
 }
 
+// Returns current time as HH:MM string
+const currentTimeStr = () => {
+  const now = new Date()
+  return `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+}
+
 export default function TaskForm({ onAdd, isOpen, onClose }) {
   const [title,      setTitle]      = useState('')
+  const [notes,      setNotes]      = useState('')
   const [tag,        setTag]        = useState('personal')
   const [priority,   setPriority]   = useState('medium')
   const [dueDate,    setDueDate]    = useState('')
@@ -27,16 +33,14 @@ export default function TaskForm({ onAdd, isOpen, onClose }) {
   const [showTemp,   setShowTemp]   = useState(false)
 
   const reset = () => {
-    setTitle(''); setTag('personal'); setPriority('medium')
+    setTitle(''); setNotes(''); setTag('personal'); setPriority('medium')
     setDueDate(''); setDueTime(''); setImportant(false)
     setRecurrence('none'); setShowCal(false); setShowTemp(false)
   }
-
   const handleClose = () => { reset(); onClose() }
-
   const handleAdd = () => {
     if (!title.trim()) return
-    onAdd({ title: title.trim(), tag, priority, dueDate, dueTime, important, recurrence })
+    onAdd({ title: title.trim(), notes, tag, priority, dueDate, dueTime, important, recurrence })
     reset(); onClose()
   }
 
@@ -45,27 +49,30 @@ export default function TaskForm({ onAdd, isOpen, onClose }) {
   return (
     <div className="fixed inset-0 z-20 flex items-end sm:items-center justify-center p-4"
       onClick={e => { if (e.target === e.currentTarget) handleClose() }}>
-      <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm" />
-
+      <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-sm"/>
       <div className="relative w-full max-w-lg bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-6 z-10 max-h-[90vh] overflow-y-auto">
 
-        {/* Header */}
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-base font-semibold text-gray-900 dark:text-white">New task</h2>
-          <button onClick={handleClose}
-            className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
-            <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-              <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round"/>
-            </svg>
+          <button onClick={handleClose} className="p-1.5 rounded-xl text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            <svg className="w-5 h-5" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"><path d="M5 5l10 10M15 5L5 15"/></svg>
           </button>
         </div>
 
         {/* Title */}
-        <div className="mb-4">
+        <div className="mb-3">
           <input type="text" value={title} onChange={e => setTitle(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') handleAdd(); if (e.key === 'Escape') handleClose() }}
             autoFocus placeholder="What needs to be done?"
             className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500"/>
+        </div>
+
+        {/* Notes */}
+        <div className="mb-4">
+          <textarea value={notes} onChange={e => setNotes(e.target.value)}
+            placeholder="Add notes (optional)"
+            rows={2}
+            className="w-full px-4 py-3 rounded-xl border border-gray-200 dark:border-gray-600 bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 text-sm focus:outline-none focus:ring-2 focus:ring-gray-300 dark:focus:ring-gray-500 resize-none"/>
         </div>
 
         {/* Templates */}
@@ -107,9 +114,7 @@ export default function TaskForm({ onAdd, isOpen, onClose }) {
             {[['Today', todayStr()], ['Tomorrow', tomorrowStr()]].map(([label, val]) => (
               <button key={label} onClick={() => { setDueDate(val); setShowCal(false) }}
                 className={`flex-1 py-2 rounded-xl text-xs font-medium transition-all border ${
-                  dueDate === val
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
-                    : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300'}`}>
+                  dueDate === val ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300'}`}>
                 {label}
               </button>
             ))}
@@ -144,18 +149,18 @@ export default function TaskForm({ onAdd, isOpen, onClose }) {
           </select>
         </div>
 
-        {/* Time */}
+        {/* Time — defaults to current time when added */}
         <div className="mb-4">
           <div className="flex items-center justify-between mb-2">
             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400">Time (optional)</label>
-            <button onClick={() => setDueTime(dueTime ? '' : '09:00')}
+            <button onClick={() => setDueTime(dueTime ? '' : currentTimeStr())}
               className={`text-xs px-2.5 py-1 rounded-lg border transition-all ${
                 dueTime ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400'}`}>
               {dueTime ? `Set: ${dueTime}` : 'Add time'}
             </button>
           </div>
           {dueTime !== '' && (
-            <div className="flex justify-center py-2 bg-gray-50 dark:bg-gray-700/50 rounded-2xl border border-gray-100 dark:border-gray-700">
+            <div className="flex justify-center py-3 bg-gray-50 dark:bg-gray-700/50 rounded-2xl border border-gray-100 dark:border-gray-700">
               <ClockPicker value={dueTime} onChange={setDueTime}/>
             </div>
           )}
@@ -168,9 +173,7 @@ export default function TaskForm({ onAdd, isOpen, onClose }) {
             {RECURRENCE_OPTIONS.map(opt => (
               <button key={opt.id} onClick={() => setRecurrence(opt.id)}
                 className={`py-2 rounded-xl text-xs font-medium transition-all border ${
-                  recurrence === opt.id
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white'
-                    : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'}`}>
+                  recurrence === opt.id ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900 border-gray-900 dark:border-white' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500'}`}>
                 {opt.id === 'none' ? '—' : opt.label}
               </button>
             ))}
@@ -184,9 +187,7 @@ export default function TaskForm({ onAdd, isOpen, onClose }) {
               important ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700' : 'bg-gray-50 dark:bg-gray-700 border-gray-200 dark:border-gray-600'}`}>
             <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 ${
               important ? 'bg-amber-500 border-amber-500 text-white' : 'border-gray-300 dark:border-gray-500'}`}>
-              {important && <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
-                <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>}
+              {important && <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none"><path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
             </div>
             <p className={`text-sm font-medium ${important ? 'text-amber-700 dark:text-amber-300' : 'text-gray-700 dark:text-gray-300'}`}>
               ★ Mark as important
