@@ -1,3 +1,6 @@
+// App.jsx — v5
+// Added: StatsScreen, keep-alive ping, subtask handlers, Web Worker alarm
+
 import { useState, useEffect }  from 'react'
 import { useAuth }        from './hooks/useAuth'
 import { useTasks }       from './hooks/useTasks'
@@ -11,6 +14,7 @@ import Header             from './components/Header'
 import Sidebar            from './components/Sidebar'
 import ProfileModal       from './components/ProfileModal'
 import SettingsModal      from './components/SettingsModal'
+import StatsScreen        from './components/StatsScreen'
 import TagFilter          from './components/TagFilter'
 import TaskList           from './components/TaskList'
 import TaskForm           from './components/TaskForm'
@@ -18,23 +22,19 @@ import EditTaskModal      from './components/EditTaskModal'
 import PushToast          from './components/PushToast'
 import AlarmModal         from './components/AlarmModal'
 
-const NOTIF_KEY   = 'done-notif-prompted'
-const SPLASH_KEY  = 'done-splash-shown'
+const NOTIF_KEY  = 'done-notif-prompted'
+const SPLASH_KEY = 'done-splash-shown'
+const BASE_URL   = import.meta.env.VITE_API_URL || 'http://localhost:5000'
 
 export default function App() {
   const { user, loading: authLoading, saveUser, loginUser, clearUser } = useAuth()
   const { settings, updateSetting } = useSettings()
 
-  // Show splash once per session (not on every page reload, just first visit)
-  const [showSplash, setShowSplash] = useState(() => {
-    return !sessionStorage.getItem(SPLASH_KEY)
-  })
+  // Splash
+  const [showSplash, setShowSplash] = useState(() => !sessionStorage.getItem(SPLASH_KEY))
+  const handleSplashDone = () => { sessionStorage.setItem(SPLASH_KEY, 'true'); setShowSplash(false) }
 
-  const handleSplashDone = () => {
-    sessionStorage.setItem(SPLASH_KEY, 'true')
-    setShowSplash(false)
-  }
-
+  // Dark mode
   const [darkMode, setDarkMode] = useState(() => {
     try {
       const s = localStorage.getItem('done-darkmode')
@@ -47,21 +47,33 @@ export default function App() {
     localStorage.setItem('done-darkmode', String(darkMode))
   }, [darkMode])
 
+  // Notification prompt
   const [showNotifPrompt, setShowNotifPrompt] = useState(false)
   useEffect(() => {
     if (user && !localStorage.getItem(NOTIF_KEY)) setShowNotifPrompt(true)
   }, [user])
 
+  // Keep Render backend alive — ping every 14 mins to prevent cold start
+  useEffect(() => {
+    if (!user) return
+    const ping = () => fetch(`${BASE_URL}/api/health`).catch(() => {})
+    const id   = setInterval(ping, 14 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [user])
+
+  // UI state
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [profileOpen,  setProfileOpen]  = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
+  const [statsOpen,    setStatsOpen]    = useState(false)
   const [formOpen,     setFormOpen]     = useState(false)
   const [activeTag,    setActiveTag]    = useState('all')
   const [editingTask,  setEditingTask]  = useState(null)
 
   const {
     tasks, loading: tasksLoading,
-    addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted
+    addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted,
+    addSubtask, toggleSubtask, deleteSubtask,
   } = useTasks(user)
 
   const {
@@ -82,14 +94,14 @@ export default function App() {
     setShowNotifPrompt(false)
   }
 
-  // ── Splash screen (shown once per session) ──────────────────────────────
+  // ── Splash ──────────────────────────────────────────────────────────────
   if (showSplash) return (
     <div className={darkMode ? 'dark' : ''}>
       <SplashScreen onDone={handleSplashDone} />
     </div>
   )
 
-  // ── Auth loading ────────────────────────────────────────────────────────
+  // ── Auth loading ─────────────────────────────────────────────────────────
   if (authLoading) return (
     <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
       <div className="text-center">
@@ -99,7 +111,7 @@ export default function App() {
     </div>
   )
 
-  // ── Auth screen ─────────────────────────────────────────────────────────
+  // ── Auth screen ───────────────────────────────────────────────────────────
   if (!user) return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
@@ -108,7 +120,7 @@ export default function App() {
     </div>
   )
 
-  // ── Notification prompt ─────────────────────────────────────────────────
+  // ── Notification prompt ───────────────────────────────────────────────────
   if (showNotifPrompt) return (
     <div className={darkMode ? 'dark' : ''}>
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
@@ -117,7 +129,14 @@ export default function App() {
     </div>
   )
 
-  // ── Main app ────────────────────────────────────────────────────────────
+  // ── Stats screen ──────────────────────────────────────────────────────────
+  if (statsOpen) return (
+    <div className={`${darkMode ? 'dark' : ''}`}>
+      <StatsScreen tasks={tasks} onClose={() => setStatsOpen(false)} />
+    </div>
+  )
+
+  // ── Main app ──────────────────────────────────────────────────────────────
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 font-sans">
       <Sidebar
@@ -128,6 +147,7 @@ export default function App() {
         onDisableNotifications={unsubscribe}
         onTestPush={sendTestPush} testStatus={testStatus}
         onOpenSettings={() => { setSidebarOpen(false); setSettingsOpen(true) }}
+        onOpenStats={() => setStatsOpen(true)}
         onSignOut={() => { setSidebarOpen(false); clearUser() }}
       />
 
@@ -150,6 +170,9 @@ export default function App() {
             onToggle={toggleTask} onDelete={deleteTask}
             onToggleImportant={toggleImportant} onClearCompleted={clearCompleted}
             onEdit={setEditingTask} timeFormat={settings.timeFormat}
+            onAddSubtask={addSubtask}
+            onToggleSubtask={toggleSubtask}
+            onDeleteSubtask={deleteSubtask}
           />
         )}
       </main>
@@ -160,7 +183,12 @@ export default function App() {
       </button>
 
       <TaskForm      onAdd={addTask}    isOpen={formOpen}      onClose={() => setFormOpen(false)} />
-      <EditTaskModal task={editingTask} isOpen={!!editingTask} onClose={() => setEditingTask(null)} onSave={editTask} />
+      {/* key=editingTask.id forces remount with fresh state when editing different tasks */}
+      <EditTaskModal
+        key={editingTask?.id}
+        task={editingTask} isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)} onSave={editTask}
+      />
       <ProfileModal  isOpen={profileOpen} onClose={() => setProfileOpen(false)} user={user} onSave={saveUser} />
       <SettingsModal isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onUpdate={updateSetting} />
       <AlarmModal    task={alarmTask} snoozeMinutes={settings.snoozeMinutes} onDismiss={handleDismiss} onSnooze={handleSnooze} />

@@ -1,3 +1,5 @@
+// useTasks.js — v5: added subtask operations
+
 import { useState, useEffect, useCallback } from 'react'
 import { tasksApi } from '../services/api'
 
@@ -23,6 +25,13 @@ export const PRIORITIES = [
   { id: 'low',    label: 'Low',    color: 'text-gray-400' },
 ]
 
+export const RECURRENCE_OPTIONS = [
+  { id: 'none',    label: 'No repeat' },
+  { id: 'daily',   label: 'Daily' },
+  { id: 'weekly',  label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
+]
+
 export function useTasks(user) {
   const [tasks,   setTasks]   = useState([])
   const [loading, setLoading] = useState(false)
@@ -39,7 +48,7 @@ export function useTasks(user) {
 
   const addTask = useCallback(async (taskData) => {
     const tempId   = `temp-${Date.now()}`
-    const tempTask = { id: tempId, ...taskData, done: false, createdAt: new Date().toISOString() }
+    const tempTask = { id: tempId, subtasks: [], recurrence: 'none', ...taskData, done: false, createdAt: new Date().toISOString() }
     setTasks(prev => [tempTask, ...prev])
     try {
       const data = await tasksApi.create(taskData)
@@ -54,7 +63,11 @@ export function useTasks(user) {
     const prev = tasks
     setTasks(p => p.map(t => t.id === id ? { ...t, ...fields } : t))
     try {
-      await tasksApi.update(id, fields)
+      const data = await tasksApi.update(id, fields)
+      // Use server response to get accurate subtasks + recurrence state
+      if (data?.task) {
+        setTasks(p => p.map(t => t.id === id ? data.task : t))
+      }
     } catch (err) {
       setTasks(prev)
       setError(err.message)
@@ -64,9 +77,17 @@ export function useTasks(user) {
   const toggleTask = useCallback(async (id) => {
     const task = tasks.find(t => t.id === id)
     if (!task) return
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t))
+    const newDone = !task.done
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: newDone } : t))
     try {
-      await tasksApi.update(id, { done: !task.done })
+      const data = await tasksApi.update(id, { done: newDone })
+      // If recurrence, a new task was created — refresh all tasks
+      if (data?.task && task.recurrence !== 'none' && newDone) {
+        const fresh = await tasksApi.getAll()
+        setTasks(fresh.tasks)
+      } else if (data?.task) {
+        setTasks(prev => prev.map(t => t.id === id ? data.task : t))
+      }
     } catch (err) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, done: task.done } : t))
       setError(err.message)
@@ -107,5 +128,56 @@ export function useTasks(user) {
     }
   }, [tasks])
 
-  return { tasks, loading, error, addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted }
+  // ── Subtask operations ──────────────────────────────────────────────────
+  const addSubtask = useCallback(async (taskId, title) => {
+    try {
+      const data = await tasksApi.addSubtask(taskId, title)
+      setTasks(prev => prev.map(t =>
+        t.id === taskId ? { ...t, subtasks: [...(t.subtasks || []), data.subtask] } : t
+      ))
+    } catch (err) { setError(err.message) }
+  }, [])
+
+  const toggleSubtask = useCallback(async (taskId, subtaskId) => {
+    const task    = tasks.find(t => t.id === taskId)
+    const subtask = task?.subtasks?.find(s => s.id === subtaskId)
+    if (!subtask) return
+
+    // Optimistic update
+    setTasks(prev => prev.map(t =>
+      t.id === taskId
+        ? { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, done: !s.done } : s) }
+        : t
+    ))
+
+    try {
+      const data = await tasksApi.updateSubtask(taskId, subtaskId, { done: !subtask.done })
+      // Server may have auto-completed the parent task
+      if (data?.task) {
+        setTasks(prev => prev.map(t => t.id === taskId ? data.task : t))
+      }
+    } catch (err) {
+      setTasks(prev => prev.map(t =>
+        t.id === taskId
+          ? { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, done: subtask.done } : s) }
+          : t
+      ))
+      setError(err.message)
+    }
+  }, [tasks])
+
+  const deleteSubtask = useCallback(async (taskId, subtaskId) => {
+    setTasks(prev => prev.map(t =>
+      t.id === taskId ? { ...t, subtasks: (t.subtasks || []).filter(s => s.id !== subtaskId) } : t
+    ))
+    try {
+      await tasksApi.deleteSubtask(taskId, subtaskId)
+    } catch (err) { setError(err.message) }
+  }, [])
+
+  return {
+    tasks, loading, error,
+    addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted,
+    addSubtask, toggleSubtask, deleteSubtask,
+  }
 }
