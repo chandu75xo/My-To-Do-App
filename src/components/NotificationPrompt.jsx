@@ -1,49 +1,58 @@
-// NotificationPrompt.jsx
-//
-// Shown ONCE after the user signs up or logs in, before the main app.
-// Asks to enable notifications with Allow / Not now buttons.
-// Never shown again after a choice is made (saved in localStorage).
+// NotificationPrompt.jsx — v5 fix: replaced emojis with SVG icons
+
+const Icon = ({ path, size = 20 }) => (
+  <svg width={size} height={size} viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d={path}/>
+  </svg>
+)
+
+const ICONS = {
+  bell:    'M10 2.5c-3 0-5 2-5 5v3l-1.5 2H16.5L15 10.5v-3c0-3-2-5-5-5zM8.5 15.5a1.5 1.5 0 003 0',
+  clock:   'M10 2.5a7.5 7.5 0 100 15 7.5 7.5 0 000-15zM10 6v4.5l3 1.5',
+  mail:    'M2.5 5.5h15v11h-15zM2.5 5.5l7.5 6 7.5-6',
+  mute:    'M10 2.5c-3 0-5 2-5 5v3l-1.5 2H16.5L15 10.5v-3c0-3-2-5-5-5zM8.5 15.5a1.5 1.5 0 003 0M3 3l14 14',
+}
 
 export default function NotificationPrompt({ onAllow, onDecline }) {
+  const features = [
+    { iconPath: ICONS.clock, text: '15-min reminders before important tasks' },
+    { iconPath: ICONS.bell,  text: 'Push alert at exact due time' },
+    { iconPath: ICONS.mute,  text: 'You can turn this off anytime in settings' },
+  ]
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex flex-col items-center justify-center px-6">
       <div className="w-full max-w-sm">
 
         {/* Icon */}
-        <div className="w-20 h-20 rounded-3xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center mx-auto mb-8">
-          <span style={{ fontSize: '2.5rem' }}>🔔</span>
+        <div className="w-20 h-20 rounded-3xl bg-gray-900 dark:bg-white flex items-center justify-center mx-auto mb-8 text-white dark:text-gray-900">
+          <Icon path={ICONS.bell} size={32}/>
         </div>
 
-        {/* Heading */}
         <h2 className="font-serif text-3xl text-gray-900 dark:text-white text-center mb-3">
           Stay on top of things
         </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 text-center leading-relaxed mb-3">
-          Get notified 15 minutes before your important tasks are due — even when the app is closed.
+        <p className="text-sm text-gray-500 dark:text-gray-400 text-center leading-relaxed mb-6">
+          Get notified before your important tasks are due — even when the app is closed.
         </p>
 
         {/* Feature list */}
         <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4 mb-8 space-y-3">
-          {[
-            { icon: '⏰', text: '15-min reminders before important tasks' },
-            { icon: '📧', text: 'Email alerts when Gmail is configured' },
-            { icon: '🔕', text: 'You can turn this off anytime in settings' },
-          ].map((item, i) => (
+          {features.map((f, i) => (
             <div key={i} className="flex items-center gap-3">
-              <span className="text-base flex-shrink-0" style={{ fontSize: '1.1rem' }}>{item.icon}</span>
-              <p className="text-sm text-gray-600 dark:text-gray-300">{item.text}</p>
+              <span className="text-gray-400 dark:text-gray-500 flex-shrink-0">
+                <Icon path={f.iconPath} size={16}/>
+              </span>
+              <p className="text-sm text-gray-600 dark:text-gray-300">{f.text}</p>
             </div>
           ))}
         </div>
 
-        {/* Buttons */}
-        <button
-          onClick={onAllow}
+        <button onClick={onAllow}
           className="w-full py-4 rounded-2xl bg-gray-900 dark:bg-white text-white dark:text-gray-900 font-semibold text-sm hover:opacity-90 active:scale-95 transition-all mb-3">
           Allow notifications
         </button>
-        <button
-          onClick={onDecline}
+        <button onClick={onDecline}
           className="w-full py-3 rounded-2xl border border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 font-medium text-sm hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
           Not now
         </button>

@@ -1,3 +1,7 @@
+// sw.js — v5 fix
+// Added: View and Dismiss action buttons on notifications
+// Both 15-min advance and exact due-time notifications get action buttons
+
 const APP_NAME = 'done.'
 
 self.addEventListener('install', () => {
@@ -17,6 +21,7 @@ self.addEventListener('push', event => {
   let body  = 'You have a task reminder'
   let url   = '/'
   let icon  = '/favicon.svg'
+  let tag   = 'done-reminder'
 
   if (event.data) {
     try {
@@ -25,25 +30,31 @@ self.addEventListener('push', event => {
       body  = data.body  || body
       url   = data.url   || url
       icon  = data.icon  || icon
+      tag   = data.tag   || tag
     } catch {
       body = event.data.text() || body
     }
   }
 
-  const showNotif = self.registration.showNotification(title, {
+  const options = {
     body,
     icon,
     badge:              '/favicon.svg',
     data:               { url },
     vibrate:            [200, 100, 200],
-    requireInteraction: false,
-    tag:                'done-' + Date.now(),
+    requireInteraction: true,
+    tag:                tag + '-' + Date.now(),
     renotify:           true,
     silent:             false,
-  })
+    // Action buttons — shown below the notification body
+    actions: [
+      { action: 'view',    title: 'View task' },
+      { action: 'dismiss', title: 'Dismiss'   },
+    ],
+  }
 
-  // Also notify open tabs so they can show an in-app toast
-  const notifyClients = clients.matchAll({ type: 'window', includeUncontrolled: true })
+  const showNotif   = self.registration.showNotification(title, options)
+  const notifyTabs  = clients.matchAll({ type: 'window', includeUncontrolled: true })
     .then(clientList => {
       clientList.forEach(client => {
         client.postMessage({ type: 'PUSH_RECEIVED', title, body })
@@ -51,15 +62,21 @@ self.addEventListener('push', event => {
     })
 
   event.waitUntil(
-    Promise.all([showNotif, notifyClients])
-      .then(() => console.log('[SW] ✅ Notification shown and clients notified'))
+    Promise.all([showNotif, notifyTabs])
+      .then(() => console.log('[SW] Notification shown:', title))
       .catch(err => console.error('[SW] Error:', err))
   )
 })
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
+
   const url = event.notification.data?.url || '/'
+
+  // Dismiss — just close, do nothing
+  if (event.action === 'dismiss') return
+
+  // View (or tap on notification body) — open/focus the app
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
       .then(clientList => {

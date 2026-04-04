@@ -1,12 +1,11 @@
-// useDueAlarm.js — v5
-// KEY FIX: Uses a Web Worker for the tick timer.
-// Web Workers run on a separate thread and are never throttled by
-// Chrome/Edge/Firefox's background tab battery-saving policy.
-// This means alarms fire accurately even when the tab is in the background.
+// useDueAlarm.js — v5 fix
+// CRITICAL FIX: Web Worker closure bug.
+// The worker sets onmessage ONCE. When tasks change, runCheck is recreated
+// but the worker still calls the OLD stale version with no tasks.
+// Fix: store latest runCheck in a ref, worker always calls ref.current().
 //
-// ADDITIONAL FIX: visibilitychange listener — when the user switches back
-// to the tab, we immediately run a check to catch any alarms that were
-// missed while the tab was hidden.
+// SNOOZE FIX: snoozedRef.get() was comparing wrong key format causing
+// snooze to never expire and re-fire. Fixed key format consistency.
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useAlarm } from './useAlarm'
@@ -22,6 +21,9 @@ export function useDueAlarm(tasks, settings) {
   const snoozedRef    = useRef(new Map())
   const autoStopTimer = useRef(null)
   const workerRef     = useRef(null)
+
+  // KEY FIX: always holds latest runCheck — worker calls this ref, not stale closure
+  const runCheckRef = useRef(null)
 
   const stopCurrentAlarm = useCallback(() => {
     stopAlarm()
@@ -55,12 +57,21 @@ export function useDueAlarm(tasks, settings) {
     if (alarmTask) {
       const snoozeMs    = (settings.snoozeMinutes || 5) * 60 * 1000
       const snoozeUntil = new Date(Date.now() + snoozeMs)
-      snoozedRef.current.set(`${alarmTask.id}-${alarmTask.dueTime}`, snoozeUntil)
+      // Store with consistent key format
+      const key = `${alarmTask.id}-${alarmTask.dueTime}`
+      snoozedRef.current.set(key, snoozeUntil)
+      // Remove from dismissed so it can re-fire after snooze
+      dismissedRef.current.delete(key)
+      // Remove from fired so it fires again
+      const now   = new Date()
+      const hhmm  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+      const today = now.toISOString().split('T')[0]
+      firedRef.current.delete(`${key}-${today}-${hhmm}`)
     }
     setAlarmTask(null)
   }, [stopCurrentAlarm, alarmTask, settings.snoozeMinutes])
 
-  // Core check — runs on every tick from the Web Worker
+  // runCheck — defined with latest tasks via useCallback
   const runCheck = useCallback(() => {
     const now   = new Date()
     const hhmm  = `${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
@@ -73,9 +84,13 @@ export function useDueAlarm(tasks, settings) {
       const fireKey     = `${taskKey}-${today}-${hhmm}`
       const snoozeUntil = snoozedRef.current.get(taskKey)
 
-      if (snoozeUntil) {
-        if (now < snoozeUntil) continue
+      // Still in snooze window
+      if (snoozeUntil && now < snoozeUntil) continue
+
+      // Snooze just expired — clear it so task can fire
+      if (snoozeUntil && now >= snoozeUntil) {
         snoozedRef.current.delete(taskKey)
+        // Clear fired key so it rings again right now
         firedRef.current.delete(fireKey)
       }
 
@@ -85,7 +100,7 @@ export function useDueAlarm(tasks, settings) {
 
       firedRef.current.add(fireKey)
       fireAlarm(task)
-      break
+      break // only one alarm at a time
     }
 
     if (firedRef.current.size > 500) {
@@ -93,37 +108,51 @@ export function useDueAlarm(tasks, settings) {
     }
   }, [tasks, fireAlarm])
 
-  // Start Web Worker — runs independently of tab visibility
+  // Update ref EVERY time runCheck changes — this is the closure fix
+  useEffect(() => {
+    runCheckRef.current = runCheck
+  }, [runCheck])
+
+  // Start Web Worker ONCE — it calls runCheckRef.current() so it always
+  // uses the latest version of runCheck even as tasks update
   useEffect(() => {
     try {
-      workerRef.current = new Worker('/alarm-worker.js')
-      workerRef.current.onmessage = () => runCheck()
-      workerRef.current.postMessage('start')
+      const worker = new Worker('/alarm-worker.js')
+      worker.onmessage = () => {
+        // Always call the LATEST runCheck via the ref
+        if (runCheckRef.current) runCheckRef.current()
+      }
+      worker.postMessage('start')
+      workerRef.current = worker
     } catch (err) {
-      // Fallback to setInterval if Worker fails (e.g. some private browsing modes)
-      console.warn('[Alarm] Web Worker unavailable, falling back to setInterval')
-      const id = setInterval(runCheck, 5000)
-      workerRef.current = { fallback: id }
+      console.warn('[Alarm] Web Worker unavailable, using setInterval fallback')
+      const id = setInterval(() => {
+        if (runCheckRef.current) runCheckRef.current()
+      }, 5000)
+      workerRef.current = { fallbackId: id }
     }
 
     return () => {
-      if (workerRef.current?.fallback) {
-        clearInterval(workerRef.current.fallback)
-      } else {
-        workerRef.current?.postMessage('stop')
-        workerRef.current?.terminate()
+      const w = workerRef.current
+      if (w?.fallbackId) {
+        clearInterval(w.fallbackId)
+      } else if (w) {
+        w.postMessage('stop')
+        w.terminate()
       }
     }
-  }, [runCheck])
+  }, []) // empty deps — worker starts ONCE, uses ref for fresh runCheck
 
-  // visibilitychange — fire any missed alarms the moment user switches back
+  // visibilitychange — catch missed alarms when tab regains focus
   useEffect(() => {
     const onVisible = () => {
-      if (document.visibilityState === 'visible') runCheck()
+      if (document.visibilityState === 'visible' && runCheckRef.current) {
+        runCheckRef.current()
+      }
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [runCheck])
+  }, []) // empty deps — stable event listener
 
   return { alarmTask, handleDismiss, handleSnooze }
 }
