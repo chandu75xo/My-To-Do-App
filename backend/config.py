@@ -8,15 +8,18 @@ class Config:
     from datetime import timedelta
     JWT_ACCESS_TOKEN_EXPIRES       = timedelta(days=30)
 
-    # Database — supports both SQLite (local) and PostgreSQL (Neon production)
-    # Neon connection strings start with "postgresql://" — SQLAlchemy needs "postgresql+psycopg2://"
+    # Supports SQLite (local), psycopg2 (Neon/Postgres), pg8000 (pure Python fallback)
     _db_url = os.getenv('DATABASE_URL', 'sqlite:///todo.db')
+
+    # Neon / Postgres URL normalization
     if _db_url.startswith('postgres://'):
         _db_url = _db_url.replace('postgres://', 'postgresql+psycopg2://', 1)
-    elif _db_url.startswith('postgresql://') and '+psycopg2' not in _db_url:
+    elif _db_url.startswith('postgresql://') and 'psycopg2' not in _db_url and 'pg8000' not in _db_url:
         _db_url = _db_url.replace('postgresql://', 'postgresql+psycopg2://', 1)
+
     SQLALCHEMY_DATABASE_URI        = _db_url
     SQLALCHEMY_TRACK_MODIFICATIONS = False
+    SQLALCHEMY_ENGINE_OPTIONS      = {'pool_pre_ping': True}  # reconnect on lost connection
 
     MAIL_SERVER          = 'smtp.gmail.com'
     MAIL_PORT            = 465
