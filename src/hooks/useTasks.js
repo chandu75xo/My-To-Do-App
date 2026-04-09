@@ -1,5 +1,3 @@
-// useTasks.js — v5: added subtask operations
-
 import { useState, useEffect, useCallback } from 'react'
 import { tasksApi } from '../services/api'
 
@@ -37,42 +35,52 @@ export function useTasks(user) {
   const [loading, setLoading] = useState(false)
   const [error,   setError]   = useState(null)
 
+  // Stable fetch — always gets latest from server
+  const fetchAll = useCallback(async () => {
+    const data = await tasksApi.getAll()
+    setTasks(data.tasks)
+  }, [])
+
   useEffect(() => {
     if (!user) return
     setLoading(true)
-    tasksApi.getAll()
-      .then(data => setTasks(data.tasks))
-      .catch(err  => setError(err.message))
+    fetchAll()
+      .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [user])
+  }, [user, fetchAll])
 
   const addTask = useCallback(async (taskData) => {
+    // Optimistic: show task immediately
     const tempId   = `temp-${Date.now()}`
-    const tempTask = { id: tempId, subtasks: [], recurrence: 'none', ...taskData, done: false, createdAt: new Date().toISOString() }
+    const tempTask = {
+      id: tempId, subtasks: [], recurrence: 'none',
+      utcOffsetMinutes: -new Date().getTimezoneOffset(),
+      ...taskData, done: false, createdAt: new Date().toISOString(),
+    }
     setTasks(prev => [tempTask, ...prev])
     try {
       const data = await tasksApi.create(taskData)
+      // Replace temp with server's real task (has real id, all fields)
       setTasks(prev => prev.map(t => t.id === tempId ? data.task : t))
     } catch (err) {
-      setTasks(prev => prev.filter(t => t.id !== tempId))
+      console.error('[Tasks] addTask failed:', err.message)
       setError(err.message)
+      // Remove temp and refetch — keeps UI accurate
+      setTasks(prev => prev.filter(t => t.id !== tempId))
+      try { await fetchAll() } catch {}
     }
-  }, [])
+  }, [fetchAll])
 
   const editTask = useCallback(async (id, fields) => {
-    const prev = tasks
-    setTasks(p => p.map(t => t.id === id ? { ...t, ...fields } : t))
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, ...fields } : t))
     try {
       const data = await tasksApi.update(id, fields)
-      // Use server response to get accurate subtasks + recurrence state
-      if (data?.task) {
-        setTasks(p => p.map(t => t.id === id ? data.task : t))
-      }
+      if (data?.task) setTasks(prev => prev.map(t => t.id === id ? data.task : t))
     } catch (err) {
-      setTasks(prev)
       setError(err.message)
+      try { await fetchAll() } catch {}
     }
-  }, [tasks])
+  }, [fetchAll])
 
   const toggleTask = useCallback(async (id) => {
     const task = tasks.find(t => t.id === id)
@@ -81,10 +89,8 @@ export function useTasks(user) {
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: newDone } : t))
     try {
       const data = await tasksApi.update(id, { done: newDone })
-      // If recurrence, a new task was created — refresh all tasks
       if (data?.task && task.recurrence !== 'none' && newDone) {
-        const fresh = await tasksApi.getAll()
-        setTasks(fresh.tasks)
+        await fetchAll()
       } else if (data?.task) {
         setTasks(prev => prev.map(t => t.id === id ? data.task : t))
       }
@@ -92,7 +98,7 @@ export function useTasks(user) {
       setTasks(prev => prev.map(t => t.id === id ? { ...t, done: task.done } : t))
       setError(err.message)
     }
-  }, [tasks])
+  }, [tasks, fetchAll])
 
   const toggleImportant = useCallback(async (id) => {
     const task = tasks.find(t => t.id === id)
@@ -107,28 +113,25 @@ export function useTasks(user) {
   }, [tasks])
 
   const deleteTask = useCallback(async (id) => {
-    const prev = tasks
-    setTasks(p => p.filter(t => t.id !== id))
+    setTasks(prev => prev.filter(t => t.id !== id))
     try {
       await tasksApi.delete(id)
     } catch (err) {
-      setTasks(prev)
       setError(err.message)
+      try { await fetchAll() } catch {}
     }
-  }, [tasks])
+  }, [fetchAll])
 
   const clearCompleted = useCallback(async () => {
-    const prev = tasks
-    setTasks(p => p.filter(t => !t.done))
+    setTasks(prev => prev.filter(t => !t.done))
     try {
       await tasksApi.clearCompleted()
     } catch (err) {
-      setTasks(prev)
       setError(err.message)
+      try { await fetchAll() } catch {}
     }
-  }, [tasks])
+  }, [fetchAll])
 
-  // ── Subtask operations ──────────────────────────────────────────────────
   const addSubtask = useCallback(async (taskId, title) => {
     try {
       const data = await tasksApi.addSubtask(taskId, title)
@@ -142,20 +145,14 @@ export function useTasks(user) {
     const task    = tasks.find(t => t.id === taskId)
     const subtask = task?.subtasks?.find(s => s.id === subtaskId)
     if (!subtask) return
-
-    // Optimistic update
     setTasks(prev => prev.map(t =>
       t.id === taskId
         ? { ...t, subtasks: t.subtasks.map(s => s.id === subtaskId ? { ...s, done: !s.done } : s) }
         : t
     ))
-
     try {
       const data = await tasksApi.updateSubtask(taskId, subtaskId, { done: !subtask.done })
-      // Server may have auto-completed the parent task
-      if (data?.task) {
-        setTasks(prev => prev.map(t => t.id === taskId ? data.task : t))
-      }
+      if (data?.task) setTasks(prev => prev.map(t => t.id === taskId ? data.task : t))
     } catch (err) {
       setTasks(prev => prev.map(t =>
         t.id === taskId
@@ -176,7 +173,7 @@ export function useTasks(user) {
   }, [])
 
   return {
-    tasks, loading, error,
+    tasks, loading, error, fetchAll,
     addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted,
     addSubtask, toggleSubtask, deleteSubtask,
   }

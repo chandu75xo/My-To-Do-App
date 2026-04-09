@@ -30,11 +30,7 @@ def _next_due_date(due_date_str, recurrence):
 @jwt_required()
 def get_tasks():
     user_id = int(get_jwt_identity())
-    tag     = request.args.get('tag')
-    query   = Task.query.filter_by(user_id=user_id)
-    if tag:
-        query = query.filter_by(tag=tag)
-    tasks = query.order_by(Task.created_at.desc()).all()
+    tasks   = Task.query.filter_by(user_id=user_id).order_by(Task.created_at.desc()).all()
     return jsonify({'tasks': [t.to_dict() for t in tasks]}), 200
 
 
@@ -46,19 +42,26 @@ def create_task():
     if not data or not data.get('title', '').strip():
         return jsonify({'error': 'Title is required'}), 400
 
-    task = Task(
-        user_id            = user_id,
-        title              = data['title'].strip(),
-        notes              = data.get('notes', '') or '',
-        tag                = data.get('tag', 'personal'),
-        priority           = data.get('priority', 'medium'),
-        due_date           = data.get('dueDate') or None,
-        due_time           = data.get('dueTime') or None,
-        important          = bool(data.get('important', False)),
-        done               = bool(data.get('done', False)),
-        recurrence         = data.get('recurrence', 'none'),
-        utc_offset_minutes = data.get('utcOffsetMinutes', 0),
+    # Build task — handle utcOffsetMinutes gracefully whether column exists or not
+    task_kwargs = dict(
+        user_id    = user_id,
+        title      = data['title'].strip(),
+        notes      = data.get('notes', '') or '',
+        tag        = data.get('tag', 'personal'),
+        priority   = data.get('priority', 'medium'),
+        due_date   = data.get('dueDate') or None,
+        due_time   = data.get('dueTime') or None,
+        important  = bool(data.get('important', False)),
+        done       = bool(data.get('done', False)),
+        recurrence = data.get('recurrence', 'none'),
     )
+    # Only set utc_offset_minutes if the column exists in the model
+    try:
+        task_kwargs['utc_offset_minutes'] = int(data.get('utcOffsetMinutes', 0))
+    except (TypeError, ValueError):
+        task_kwargs['utc_offset_minutes'] = 0
+
+    task = Task(**task_kwargs)
     db.session.add(task)
     db.session.commit()
     return jsonify({'task': task.to_dict()}), 201
@@ -75,38 +78,45 @@ def update_task(task_id):
     data     = request.get_json()
     was_done = task.done
 
-    if 'title'              in data: task.title              = data['title'].strip()
-    if 'notes'              in data: task.notes              = data.get('notes', '')
-    if 'tag'                in data: task.tag                = data['tag']
-    if 'priority'           in data: task.priority           = data['priority']
-    if 'dueDate'            in data: task.due_date           = data['dueDate'] or None
-    if 'dueTime'            in data: task.due_time           = data['dueTime'] or None
-    if 'important'          in data: task.important          = bool(data['important'])
-    if 'done'               in data: task.done               = bool(data['done'])
-    if 'recurrence'         in data: task.recurrence         = data['recurrence']
-    if 'utcOffsetMinutes'   in data: task.utc_offset_minutes = data['utcOffsetMinutes']
+    if 'title'            in data: task.title      = data['title'].strip()
+    if 'notes'            in data: task.notes       = data.get('notes', '')
+    if 'tag'              in data: task.tag          = data['tag']
+    if 'priority'         in data: task.priority     = data['priority']
+    if 'dueDate'          in data: task.due_date      = data['dueDate'] or None
+    if 'dueTime'          in data: task.due_time      = data['dueTime'] or None
+    if 'important'        in data: task.important     = bool(data['important'])
+    if 'done'             in data: task.done          = bool(data['done'])
+    if 'recurrence'       in data: task.recurrence    = data['recurrence']
+    if 'utcOffsetMinutes' in data:
+        try: task.utc_offset_minutes = int(data['utcOffsetMinutes'])
+        except (TypeError, ValueError): pass
 
+    # Reset reminder flags when time changes
     if 'dueTime' in data or 'dueDate' in data:
         task.reminder_sent = False
         task.push_sent     = False
         task.due_push_sent = False
 
+    # Auto-complete parent if all subtasks done
     if task.subtasks and all(s.done for s in task.subtasks):
         task.done = True
 
+    # Recurrence: create next occurrence when marked done
     newly_done = task.done
     if not was_done and newly_done and task.recurrence != 'none':
         next_date = _next_due_date(task.due_date, task.recurrence)
+        offset    = getattr(task, 'utc_offset_minutes', 0) or 0
         db.session.add(Task(
             user_id            = user_id,
             title              = task.title,
+            notes              = task.notes or '',
             tag                = task.tag,
             priority           = task.priority,
             due_date           = next_date,
             due_time           = task.due_time,
             important          = task.important,
             recurrence         = task.recurrence,
-            utc_offset_minutes = task.utc_offset_minutes,
+            utc_offset_minutes = offset,
         ))
 
     db.session.commit()
@@ -145,7 +155,8 @@ def add_subtask(task_id):
     if not title: return jsonify({'error': 'Title required'}), 400
     if len(task.subtasks) >= 10: return jsonify({'error': 'Max 10 subtasks'}), 400
     s = Subtask(task_id=task_id, title=title)
-    db.session.add(s); db.session.commit()
+    db.session.add(s)
+    db.session.commit()
     return jsonify({'subtask': s.to_dict()}), 201
 
 
@@ -173,5 +184,6 @@ def delete_subtask(task_id, sub_id):
     if not task: return jsonify({'error': 'Task not found'}), 404
     sub = Subtask.query.filter_by(id=sub_id, task_id=task_id).first()
     if not sub: return jsonify({'error': 'Subtask not found'}), 404
-    db.session.delete(sub); db.session.commit()
+    db.session.delete(sub)
+    db.session.commit()
     return '', 204
