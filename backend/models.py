@@ -26,37 +26,42 @@ class User(db.Model):
 
 class Task(db.Model):
     __tablename__ = 'tasks'
-    id            = db.Column(db.Integer, primary_key=True)
-    user_id       = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    title         = db.Column(db.String(255), nullable=False)
-    notes         = db.Column(db.Text,        nullable=True)
-    tag           = db.Column(db.String(50),  nullable=False, default='personal')
-    priority      = db.Column(db.String(20),  nullable=False, default='medium')
-    due_date      = db.Column(db.String(10),  nullable=True)
-    due_time      = db.Column(db.String(10),  nullable=True)
-    important     = db.Column(db.Boolean,     nullable=False, default=False)
-    done          = db.Column(db.Boolean,     nullable=False, default=False)
-    reminder_sent = db.Column(db.Boolean,     nullable=False, default=False)
-    push_sent     = db.Column(db.Boolean,     nullable=False, default=False)
-    due_push_sent = db.Column(db.Boolean,     nullable=False, default=False)
-    recurrence    = db.Column(db.String(20),  nullable=False, default='none')
-    created_at    = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
-    subtasks      = db.relationship('Subtask', backref='task', cascade='all, delete-orphan', lazy=True, order_by='Subtask.created_at')
+    id                 = db.Column(db.Integer, primary_key=True)
+    user_id            = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title              = db.Column(db.String(255), nullable=False)
+    notes              = db.Column(db.Text,        nullable=True)
+    tag                = db.Column(db.String(50),  nullable=False, default='personal')
+    priority           = db.Column(db.String(20),  nullable=False, default='medium')
+    due_date           = db.Column(db.String(10),  nullable=True)
+    due_time           = db.Column(db.String(10),  nullable=True)
+    important          = db.Column(db.Boolean,     nullable=False, default=False)
+    done               = db.Column(db.Boolean,     nullable=False, default=False)
+    reminder_sent      = db.Column(db.Boolean,     nullable=False, default=False)
+    push_sent          = db.Column(db.Boolean,     nullable=False, default=False)
+    due_push_sent      = db.Column(db.Boolean,     nullable=False, default=False)
+    recurrence         = db.Column(db.String(20),  nullable=False, default='none')
+    # Timezone offset in minutes at time of creation
+    # IST = +330, EST = -300, UTC = 0, PST = -480
+    utc_offset_minutes = db.Column(db.Integer,     nullable=False, default=0)
+    created_at         = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
+    subtasks           = db.relationship('Subtask', backref='task', cascade='all, delete-orphan',
+                                         lazy=True, order_by='Subtask.created_at')
 
     def to_dict(self):
         return {
-            'id':         self.id,
-            'title':      self.title,
-            'notes':      self.notes or '',
-            'tag':        self.tag,
-            'priority':   self.priority,
-            'dueDate':    self.due_date  or '',
-            'dueTime':    self.due_time  or '',
-            'important':  self.important,
-            'done':       self.done,
-            'recurrence': self.recurrence,
-            'subtasks':   [s.to_dict() for s in self.subtasks],
-            'createdAt':  self.created_at.isoformat(),
+            'id':               self.id,
+            'title':            self.title,
+            'notes':            self.notes or '',
+            'tag':              self.tag,
+            'priority':         self.priority,
+            'dueDate':          self.due_date  or '',
+            'dueTime':          self.due_time  or '',
+            'important':        self.important,
+            'done':             self.done,
+            'recurrence':       self.recurrence,
+            'utcOffsetMinutes': self.utc_offset_minutes,
+            'subtasks':         [s.to_dict() for s in self.subtasks],
+            'createdAt':        self.created_at.isoformat(),
         }
 
 
