@@ -12,10 +12,18 @@ loglevel     = 'info'
 preload_app  = True
 
 def post_fork(server, worker):
+    # APScheduler threads do NOT survive fork().
+    # Reset _scheduler=None so start_scheduler() always creates a fresh one.
+    try:
+        import services.reminder as rem
+        rem._scheduler = None
+    except Exception:
+        pass
     try:
         from app import app
         from services.reminder import start_scheduler
         start_scheduler(app)
         server.log.info(f'[Scheduler] Started in worker pid={worker.pid}')
     except Exception as e:
-        server.log.error(f'[Scheduler] Failed to start: {e}')
+        server.log.error(f'[Scheduler] FAILED: {e}')
+        import traceback; traceback.print_exc()

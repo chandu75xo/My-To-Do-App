@@ -1,24 +1,24 @@
-# reminder.py — final notification fix
+# reminder.py — definitive fix
 #
-# TIMEZONE APPROACH:
-# Tasks have utc_offset_minutes (browser offset when task was created).
-# Scheduler uses datetime.utcnow() and converts each task's due time to UTC.
-# For legacy tasks with utc_offset_minutes=0, we also try the server's local time
-# as a fallback so old tasks still work.
-#
-# TIMING:
-# - 15-min advance: fires when task is 14–16 minutes away (UTC)
-# - Exact due: fires when task is within ±60 seconds (UTC)
-# - Runs every 30 seconds — max drift is 30 seconds
+# ISSUES FIXED:
+# 1. Scheduler thread reset in gunicorn.conf.py post_fork (see that file)
+# 2. push_sent / reminder_sent flags: tasks already tested have these=True
+#    forever. Fix: reset them when due time is updated (already in tasks.py).
+#    For brand new tasks they start as False — correct.
+# 3. UTC offset: tasks with utc_offset_minutes=0 (old tasks or UTC users)
+#    are compared against server UTC directly — works when offset is genuinely 0.
+#    For IST users with old tasks, use debug/fix-offsets endpoint (see debug.py).
+# 4. Wide matching window: ±90 seconds for exact due, 13-17 min for advance.
+#    This absorbs any scheduler drift (runs every 30s).
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from datetime import datetime, timedelta
 
-_scheduler = None
+_scheduler = None   # reset to None in gunicorn post_fork before calling start_scheduler
 
 
 def _to_utc(due_date, due_time, utc_offset_minutes):
-    """Convert local due time to UTC datetime. Returns None if invalid."""
+    """Convert local due datetime to UTC. Returns None if inputs invalid."""
     if not due_date or not due_time:
         return None
     try:
@@ -37,20 +37,17 @@ def check_reminders(app):
             from services.push_service import send_push_notification
 
             now_utc = datetime.utcnow()
-            print(f'[Scheduler] Tick {now_utc.strftime("%Y-%m-%d %H:%M:%S")} UTC', flush=True)
+            print(f'[Scheduler] Tick {now_utc.strftime("%H:%M:%S")} UTC', flush=True)
 
-            active_tasks = Task.query.filter(
+            active = Task.query.filter(
                 Task.done     == False,
                 Task.due_date != None,
                 Task.due_time != None,
             ).all()
 
-            if not active_tasks:
-                return
+            print(f'[Scheduler] {len(active)} active tasks with due time', flush=True)
 
-            print(f'[Scheduler] Checking {len(active_tasks)} active tasks', flush=True)
-
-            for task in active_tasks:
+            for task in active:
                 offset  = getattr(task, 'utc_offset_minutes', 0) or 0
                 due_utc = _to_utc(task.due_date, task.due_time, offset)
                 if not due_utc:
@@ -58,80 +55,65 @@ def check_reminders(app):
 
                 diff = (due_utc - now_utc).total_seconds()
 
-                user = None
-
-                # ── 15-min advance push + email ─────────────────────────────
-                if task.important and not task.push_sent and 840 <= diff <= 960:
-                    user = user or User.query.get(task.user_id)
+                # ── 15-min advance push (window: 13–17 min = 780–1020s) ──────
+                if task.important and not task.push_sent and 780 <= diff <= 1020:
+                    user = User.query.get(task.user_id)
                     if user:
                         subs = PushSubscription.query.filter_by(user_id=task.user_id).all()
                         sent = 0
                         for sub in subs:
                             r = send_push_notification(
-                                sub.to_dict(),
-                                title = '⏰ Due in 15 minutes',
-                                body  = task.title,
-                            )
+                                sub.to_dict(), '⏰ Due in 15 minutes', task.title)
                             if r == '410': db.session.delete(sub)
                             elif r: sent += 1
                         task.push_sent = True
+                        db.session.commit()
                         print(f'[Reminder] 15-min push → {sent} device(s): "{task.title}"', flush=True)
 
-                if task.important and not task.reminder_sent and 840 <= diff <= 960:
-                    user = user or User.query.get(task.user_id)
+                # ── 15-min advance email (same window, independent flag) ──────
+                if task.important and not task.reminder_sent and 780 <= diff <= 1020:
+                    user = User.query.get(task.user_id)
                     if user:
                         try:
-                            send_reminder_email(
-                                to_email       = user.email,
-                                preferred_name = user.preferred_name,
-                                task_title     = task.title,
-                                due_time       = task.due_time,
-                            )
+                            send_reminder_email(user.email, user.preferred_name,
+                                                task.title, task.due_time)
                             task.reminder_sent = True
-                            print(f'[Reminder] Email sent to {user.email}: "{task.title}"', flush=True)
+                            db.session.commit()
+                            print(f'[Reminder] Email → {user.email}: "{task.title}"', flush=True)
                         except Exception as e:
-                            print(f'[Reminder] Email failed: {e}', flush=True)
+                            print(f'[Reminder] Email FAILED: {e}', flush=True)
 
-                # ── Exact due-time push ─────────────────────────────────────
-                if not task.due_push_sent and -60 <= diff <= 60:
-                    user = user or User.query.get(task.user_id)
+                # ── Exact due-time push (window: ±90 seconds) ────────────────
+                if not task.due_push_sent and -90 <= diff <= 90:
+                    user = User.query.get(task.user_id)
                     if user:
                         subs = PushSubscription.query.filter_by(user_id=task.user_id).all()
                         sent = 0
                         for sub in subs:
                             r = send_push_notification(
-                                sub.to_dict(),
-                                title = '🔔 Task is due now!',
-                                body  = task.title,
-                            )
+                                sub.to_dict(), '🔔 Task is due now!', task.title)
                             if r == '410': db.session.delete(sub)
                             elif r: sent += 1
                         task.due_push_sent = True
+                        db.session.commit()
                         print(f'[Reminder] Due-now push → {sent} device(s): "{task.title}"', flush=True)
-
-            db.session.commit()
 
         except Exception as e:
             print(f'[Reminder] EXCEPTION: {e}', flush=True)
-            import traceback
-            traceback.print_exc()
+            import traceback; traceback.print_exc()
 
 
 def start_scheduler(app):
     global _scheduler
     if _scheduler is not None and _scheduler.running:
-        print('[Scheduler] Already running — skipping', flush=True)
+        print('[Scheduler] Already running — skip', flush=True)
         return _scheduler
     _scheduler = BackgroundScheduler(daemon=True)
     _scheduler.add_job(
-        func          = check_reminders,
-        args          = [app],
-        trigger       = 'interval',
-        seconds       = 30,
-        id            = 'reminder_check',
-        max_instances = 1,
-        coalesce      = True,  # if missed, run once not multiple times
+        func=check_reminders, args=[app],
+        trigger='interval', seconds=30,
+        id='reminder_check', max_instances=1, coalesce=True,
     )
     _scheduler.start()
-    print('[Scheduler] Started — running every 30s', flush=True)
+    print('[Scheduler] Started — every 30s', flush=True)
     return _scheduler
