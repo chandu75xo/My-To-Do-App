@@ -1,89 +1,107 @@
-// sw.js — v5 fix
-// Added: View and Dismiss action buttons on notifications
-// Both 15-min advance and exact due-time notifications get action buttons
+// sw.js — v5d
+// 3 notification actions: View task, Mark as complete, Dismiss
+// "Mark as complete" calls backend directly from the Service Worker
+// Works even when the webapp is completely closed
 
-const APP_NAME = 'done.'
+const APP = 'done.'
 
 self.addEventListener('install', () => {
-  console.log('[SW] Installed')
+  console.log('[SW] Installed v5d')
   self.skipWaiting()
 })
 
 self.addEventListener('activate', event => {
-  console.log('[SW] Activated')
+  console.log('[SW] Activated v5d')
   event.waitUntil(clients.claim())
 })
 
 self.addEventListener('push', event => {
-  console.log('[SW] Push received')
+  if (!event.data) return
 
-  let title = APP_NAME
-  let body  = 'You have a task reminder'
-  let url   = '/'
-  let icon  = '/favicon.svg'
-  let tag   = 'done-reminder'
+  let d = {}
+  try { d = event.data.json() } catch { d = { body: event.data.text() } }
 
-  if (event.data) {
-    try {
-      const data = event.data.json()
-      title = data.title || title
-      body  = data.body  || body
-      url   = data.url   || url
-      icon  = data.icon  || icon
-      tag   = data.tag   || tag
-    } catch {
-      body = event.data.text() || body
-    }
-  }
+  const title = d.title || APP
+  const body  = d.body  || 'You have a task reminder'
+  const url   = d.url   || '/'
+  const tag   = d.tag   || 'done-reminder'
 
   const options = {
     body,
-    icon,
+    icon:               '/favicon.svg',
     badge:              '/favicon.svg',
-    data:               { url },
-    vibrate:            [200, 100, 200],
     requireInteraction: true,
-    tag:                tag + '-' + Date.now(),
+    tag:                tag,
     renotify:           true,
-    silent:             false,
-    // Action buttons — shown below the notification body
+    vibrate:            [200, 100, 200, 100, 200],
+    data: {
+      url,
+      taskId:        d.taskId        || null,
+      completeToken: d.completeToken || null,
+      completeUrl:   d.completeUrl   || null,
+    },
     actions: [
-      { action: 'view',    title: 'View task' },
-      { action: 'dismiss', title: 'Dismiss'   },
+      { action: 'view',     title: 'View task'        },
+      { action: 'complete', title: 'Mark as complete'  },
+      { action: 'dismiss',  title: 'Dismiss'           },
     ],
   }
 
-  const showNotif   = self.registration.showNotification(title, options)
-  const notifyTabs  = clients.matchAll({ type: 'window', includeUncontrolled: true })
-    .then(clientList => {
-      clientList.forEach(client => {
-        client.postMessage({ type: 'PUSH_RECEIVED', title, body })
-      })
-    })
+  // Notify open tabs so they show the in-app toast
+  const notifyTabs = clients
+    .matchAll({ type: 'window', includeUncontrolled: true })
+    .then(all => all.forEach(c => c.postMessage({ type: 'PUSH_RECEIVED', title, body })))
 
   event.waitUntil(
-    Promise.all([showNotif, notifyTabs])
-      .then(() => console.log('[SW] Notification shown:', title))
-      .catch(err => console.error('[SW] Error:', err))
+    Promise.all([
+      self.registration.showNotification(title, options),
+      notifyTabs,
+    ])
   )
 })
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
+  const data = event.notification.data || {}
 
-  const url = event.notification.data?.url || '/'
-
-  // Dismiss — just close, do nothing
   if (event.action === 'dismiss') return
 
-  // View (or tap on notification body) — open/focus the app
+  if (event.action === 'complete') {
+    // Mark task complete directly from notification — no app needed
+    const { completeToken, completeUrl } = data
+    if (completeToken && completeUrl) {
+      event.waitUntil(
+        fetch(completeUrl, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ token: completeToken }),
+        })
+        .then(r => {
+          if (r.ok) {
+            // Show a brief confirmation notification
+            return self.registration.showNotification(APP, {
+              body:  'Task marked as complete',
+              icon:  '/favicon.svg',
+              badge: '/favicon.svg',
+              tag:   'done-complete-confirm',
+            })
+          }
+        })
+        .catch(e => console.error('[SW] Complete failed:', e))
+      )
+    }
+    return
+  }
+
+  // View task or tap notification body — open/focus the app
+  const viewUrl = data.url || '/'
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true })
-      .then(clientList => {
-        for (const client of clientList) {
-          if ('focus' in client) return client.focus()
+      .then(all => {
+        for (const c of all) {
+          if ('focus' in c) return c.focus()
         }
-        if (clients.openWindow) return clients.openWindow(url)
+        return clients.openWindow(viewUrl)
       })
   )
 })

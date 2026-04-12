@@ -1,13 +1,11 @@
-# debug.py — scheduler status + fix UTC offsets for legacy tasks
-
 from flask import Blueprint, request, jsonify
 import os
 
 debug_bp = Blueprint('debug', __name__)
 
 def _auth():
-    secret = os.getenv('ADMIN_SECRET', '')
-    if not secret or request.args.get('secret') != secret:
+    s = os.getenv('ADMIN_SECRET', '')
+    if not s or request.args.get('secret') != s:
         return jsonify({'error': 'Unauthorized'}), 401
     return None
 
@@ -18,7 +16,7 @@ def scheduler_status():
     try:
         from services.reminder import _scheduler
         if _scheduler is None:
-            return jsonify({'running': False, 'error': 'Scheduler is None'}), 200
+            return jsonify({'running': False, 'error': 'Not started'}), 200
         jobs = [{'id': j.id, 'next_run': str(j.next_run_time)} for j in _scheduler.get_jobs()]
         return jsonify({'running': _scheduler.running, 'jobs': jobs}), 200
     except Exception as e:
@@ -26,62 +24,45 @@ def scheduler_status():
 
 @debug_bp.route('/trigger', methods=['POST'])
 def trigger():
-    """Manually fire reminder check — use to test without waiting."""
     err = _auth()
     if err: return err
     try:
-        from app import app as flask_app
+        from app import app as fa
         from services.reminder import check_reminders
-        check_reminders(flask_app)
-        return jsonify({'message': 'Done — check Render logs'}), 200
+        check_reminders(fa)
+        return jsonify({'message': 'Triggered — check Render logs'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 @debug_bp.route('/fix-offsets', methods=['POST'])
 def fix_offsets():
-    """
-    One-time fix for legacy tasks that have utc_offset_minutes=0
-    but were created by users in non-UTC timezones.
-    Pass offset_minutes as the correct offset (e.g. 330 for IST).
-    Only updates tasks where utc_offset_minutes is currently 0.
-    POST /api/debug/fix-offsets?secret=X&offset=330
-    """
+    """Set utc_offset_minutes for all tasks with offset=0. Use for legacy tasks."""
     err = _auth()
     if err: return err
     try:
-        offset = int(request.args.get('offset', 0))
+        offset = int(request.args.get('offset', 330))
         from models import Task
         from app_instance import db
-        updated = Task.query.filter_by(utc_offset_minutes=0).update(
-            {'utc_offset_minutes': offset}
-        )
-        # Also reset reminder flags so tasks can fire with correct timing
-        Task.query.filter_by(utc_offset_minutes=offset, push_sent=True).update(
-            {'push_sent': False, 'reminder_sent': False, 'due_push_sent': False}
-        )
+        n = Task.query.filter_by(utc_offset_minutes=0).update({'utc_offset_minutes': offset})
         db.session.commit()
-        return jsonify({'message': f'Updated {updated} tasks to offset={offset}min'}), 200
+        return jsonify({'message': f'Updated {n} tasks to offset={offset}'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@debug_bp.route('/reset-task-flags', methods=['POST'])
-def reset_task_flags():
-    """
-    Reset push/reminder flags on all incomplete tasks so they can fire again.
-    Useful when testing or after a fix deployment.
-    POST /api/debug/reset-task-flags?secret=X
-    """
+@debug_bp.route('/reset-flags', methods=['POST'])
+def reset_flags():
+    """Reset all notification flags so tasks can fire again. Use after fixes."""
     err = _auth()
     if err: return err
     try:
         from models import Task
         from app_instance import db
-        count = Task.query.filter_by(done=False).update({
-            'push_sent': False,
-            'reminder_sent': False,
-            'due_push_sent': False,
+        n = Task.query.filter_by(done=False).update({
+            'push_before_sent': False, 'push_due_sent': False, 'push_after_sent': False,
+            'email_before_sent': False, 'email_due_sent': False, 'email_after_sent': False,
+            'push_sent': False, 'reminder_sent': False, 'due_push_sent': False,
         })
         db.session.commit()
-        return jsonify({'message': f'Reset flags on {count} incomplete tasks'}), 200
+        return jsonify({'message': f'Reset flags on {n} tasks'}), 200
     except Exception as e:
         return jsonify({'error': str(e)}), 500

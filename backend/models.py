@@ -26,8 +26,8 @@ class User(db.Model):
 
 class Task(db.Model):
     __tablename__ = 'tasks'
-    id                 = db.Column(db.Integer, primary_key=True)
-    user_id            = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    id                 = db.Column(db.Integer,     primary_key=True)
+    user_id            = db.Column(db.Integer,     db.ForeignKey('users.id'), nullable=False)
     title              = db.Column(db.String(255), nullable=False)
     notes              = db.Column(db.Text,        nullable=True)
     tag                = db.Column(db.String(50),  nullable=False, default='personal')
@@ -36,14 +36,20 @@ class Task(db.Model):
     due_time           = db.Column(db.String(10),  nullable=True)
     important          = db.Column(db.Boolean,     nullable=False, default=False)
     done               = db.Column(db.Boolean,     nullable=False, default=False)
-    reminder_sent      = db.Column(db.Boolean,     nullable=False, default=False)
-    push_sent          = db.Column(db.Boolean,     nullable=False, default=False)
-    due_push_sent      = db.Column(db.Boolean,     nullable=False, default=False)
     recurrence         = db.Column(db.String(20),  nullable=False, default='none')
-    # Timezone offset in minutes at time of creation
-    # IST = +330, EST = -300, UTC = 0, PST = -480
     utc_offset_minutes = db.Column(db.Integer,     nullable=False, default=0)
-    created_at         = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
+    # 6 independent notification flags (3 push + 3 email)
+    push_before_sent   = db.Column(db.Boolean, nullable=False, default=False)
+    push_due_sent      = db.Column(db.Boolean, nullable=False, default=False)
+    push_after_sent    = db.Column(db.Boolean, nullable=False, default=False)
+    email_before_sent  = db.Column(db.Boolean, nullable=False, default=False)
+    email_due_sent     = db.Column(db.Boolean, nullable=False, default=False)
+    email_after_sent   = db.Column(db.Boolean, nullable=False, default=False)
+    # Legacy flags — kept for DB compatibility
+    reminder_sent      = db.Column(db.Boolean, nullable=False, default=False)
+    push_sent          = db.Column(db.Boolean, nullable=False, default=False)
+    due_push_sent      = db.Column(db.Boolean, nullable=False, default=False)
+    created_at         = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     subtasks           = db.relationship('Subtask', backref='task', cascade='all, delete-orphan',
                                          lazy=True, order_by='Subtask.created_at')
 
@@ -54,8 +60,8 @@ class Task(db.Model):
             'notes':            self.notes or '',
             'tag':              self.tag,
             'priority':         self.priority,
-            'dueDate':          self.due_date  or '',
-            'dueTime':          self.due_time  or '',
+            'dueDate':          self.due_date or '',
+            'dueTime':          self.due_time or '',
             'important':        self.important,
             'done':             self.done,
             'recurrence':       self.recurrence,
@@ -67,11 +73,11 @@ class Task(db.Model):
 
 class Subtask(db.Model):
     __tablename__ = 'subtasks'
-    id         = db.Column(db.Integer, primary_key=True)
-    task_id    = db.Column(db.Integer, db.ForeignKey('tasks.id'), nullable=False)
+    id         = db.Column(db.Integer,     primary_key=True)
+    task_id    = db.Column(db.Integer,     db.ForeignKey('tasks.id'), nullable=False)
     title      = db.Column(db.String(255), nullable=False)
-    done       = db.Column(db.Boolean,    nullable=False, default=False)
-    created_at = db.Column(db.DateTime,   default=lambda: datetime.now(timezone.utc))
+    done       = db.Column(db.Boolean,     nullable=False, default=False)
+    created_at = db.Column(db.DateTime,    default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {'id': self.id, 'title': self.title, 'done': self.done}
@@ -79,7 +85,7 @@ class Subtask(db.Model):
 
 class OTPCode(db.Model):
     __tablename__ = 'otp_codes'
-    id         = db.Column(db.Integer, primary_key=True)
+    id         = db.Column(db.Integer,     primary_key=True)
     email      = db.Column(db.String(120), nullable=False)
     code       = db.Column(db.String(6),   nullable=False)
     purpose    = db.Column(db.String(20),  nullable=False)
