@@ -4,6 +4,7 @@ import { useTasks }       from './hooks/useTasks'
 import { usePush }        from './hooks/usePush'
 import { useSettings }    from './hooks/useSettings'
 import { useDueAlarm }    from './hooks/useDueAlarm'
+import AdminDashboard     from './components/AdminDashboard'
 import SplashScreen       from './components/SplashScreen'
 import AuthScreen         from './components/AuthScreen'
 import NotificationPrompt from './components/NotificationPrompt'
@@ -37,12 +38,22 @@ function sortTasks(tasks, sort) {
 }
 
 export default function App() {
+
+  // ── Admin route — intercept /admin before anything else ────────────────────
+  // Not linked anywhere in the main app. Only accessible by direct URL.
+  if (window.location.pathname === '/admin') {
+    return <AdminDashboard />
+  }
+
+  // ── Auth + settings ─────────────────────────────────────────────────────────
   const { user, loading: authLoading, saveUser, loginUser, clearUser } = useAuth()
   const { settings, updateSetting } = useSettings()
 
+  // Splash — once per session
   const [showSplash, setShowSplash] = useState(() => !sessionStorage.getItem(SPLASH_KEY))
   const handleSplashDone = () => { sessionStorage.setItem(SPLASH_KEY, 'true'); setShowSplash(false) }
 
+  // Dark mode
   const [darkMode, setDarkMode] = useState(() => {
     try { const s = localStorage.getItem('done-darkmode'); if (s) return s === 'true' } catch {}
     return window.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false
@@ -52,18 +63,20 @@ export default function App() {
     localStorage.setItem('done-darkmode', String(darkMode))
   }, [darkMode])
 
+  // Notification prompt — once per account
   const [showNotifPrompt, setShowNotifPrompt] = useState(false)
   useEffect(() => {
     if (user && !localStorage.getItem(NOTIF_KEY)) setShowNotifPrompt(true)
   }, [user])
 
-  // Keep-alive ping every 14 mins
+  // Keep Render backend alive — ping every 14 min to prevent cold start
   useEffect(() => {
     if (!user) return
     const id = setInterval(() => fetch(`${BASE_URL}/api/health`).catch(() => {}), 14 * 60 * 1000)
     return () => clearInterval(id)
   }, [user])
 
+  // ── UI state ─────────────────────────────────────────────────────────────────
   const [sidebarOpen,  setSidebarOpen]  = useState(false)
   const [profileOpen,  setProfileOpen]  = useState(false)
   const [settingsOpen, setSettingsOpen] = useState(false)
@@ -74,6 +87,7 @@ export default function App() {
   const [search,       setSearch]       = useState('')
   const [sort,         setSort]         = useState('created')
 
+  // ── Data hooks ───────────────────────────────────────────────────────────────
   const {
     tasks, loading: tasksLoading,
     addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted,
@@ -88,7 +102,7 @@ export default function App() {
 
   const { alarmTask, handleDismiss, handleSnooze } = useDueAlarm(tasks, settings)
 
-  // Search + sort + tag filter all applied here
+  // Apply tag filter + search + sort
   const displayTasks = useMemo(() => {
     let t = tasks
     if (activeTag !== 'all') t = t.filter(task => task.tag === activeTag)
@@ -103,14 +117,22 @@ export default function App() {
   }, [tasks, activeTag, search, sort])
 
   const handleAllow = async () => {
-    localStorage.setItem(NOTIF_KEY, 'true'); setShowNotifPrompt(false)
+    localStorage.setItem(NOTIF_KEY, 'true')
+    setShowNotifPrompt(false)
     await requestPermission()
   }
   const handleDecline = () => {
-    localStorage.setItem(NOTIF_KEY, 'true'); setShowNotifPrompt(false)
+    localStorage.setItem(NOTIF_KEY, 'true')
+    setShowNotifPrompt(false)
   }
 
-  if (showSplash) return <div className={darkMode ? 'dark' : ''}><SplashScreen onDone={handleSplashDone}/></div>
+  // ── Screens ───────────────────────────────────────────────────────────────────
+
+  if (showSplash) return (
+    <div className={darkMode ? 'dark' : ''}>
+      <SplashScreen onDone={handleSplashDone}/>
+    </div>
+  )
 
   if (authLoading) return (
     <div className={`${darkMode ? 'dark' : ''} min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center`}>
@@ -143,22 +165,35 @@ export default function App() {
     </div>
   )
 
+  // ── Main app ──────────────────────────────────────────────────────────────────
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 transition-colors duration-300 font-sans">
+
       <Sidebar
         isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)}
         darkMode={darkMode} setDarkMode={setDarkMode} user={user}
         permission={permission} isSupported={isSupported}
-        onEnableNotifications={requestPermission} onDisableNotifications={unsubscribe}
+        onEnableNotifications={requestPermission}
+        onDisableNotifications={unsubscribe}
         onTestPush={sendTestPush} testStatus={testStatus}
         onOpenSettings={() => { setSidebarOpen(false); setSettingsOpen(true) }}
         onOpenStats={() => setStatsOpen(true)}
         onSignOut={() => { setSidebarOpen(false); clearUser() }}
       />
 
-      <Header user={user} onMenuOpen={() => setSidebarOpen(true)} onProfileOpen={() => setProfileOpen(true)}/>
+      <Header
+        user={user}
+        onMenuOpen={() => setSidebarOpen(true)}
+        onProfileOpen={() => setProfileOpen(true)}
+      />
+
       <TagFilter activeTag={activeTag} setActiveTag={setActiveTag}/>
-      <SearchSortBar search={search} setSearch={setSearch} sort={sort} setSort={setSort}/>
+
+      <SearchSortBar
+        search={search} setSearch={setSearch}
+        sort={sort}     setSort={setSort}
+      />
 
       <main className="max-w-2xl mx-auto px-4 py-4 pb-28">
         {tasksLoading ? (
@@ -167,25 +202,59 @@ export default function App() {
           </div>
         ) : (
           <TaskList
-            tasks={displayTasks} activeTag={activeTag}
-            onToggle={toggleTask} onDelete={deleteTask}
-            onToggleImportant={toggleImportant} onClearCompleted={clearCompleted}
-            onEdit={setEditingTask} timeFormat={settings.timeFormat}
-            onAddSubtask={addSubtask} onToggleSubtask={toggleSubtask} onDeleteSubtask={deleteSubtask}
+            tasks={displayTasks}
+            activeTag={activeTag}
+            onToggle={toggleTask}
+            onDelete={deleteTask}
+            onToggleImportant={toggleImportant}
+            onClearCompleted={clearCompleted}
+            onEdit={setEditingTask}
+            timeFormat={settings.timeFormat}
+            onAddSubtask={addSubtask}
+            onToggleSubtask={toggleSubtask}
+            onDeleteSubtask={deleteSubtask}
           />
         )}
       </main>
 
-      <button onClick={() => setFormOpen(true)}
+      {/* Floating add button */}
+      <button
+        onClick={() => setFormOpen(true)}
         className="fixed bottom-6 right-6 w-14 h-14 bg-gray-900 dark:bg-white text-white dark:text-gray-900 rounded-2xl shadow-lg hover:shadow-xl hover:scale-105 active:scale-95 transition-all duration-200 flex items-center justify-center text-2xl font-light z-10">
         +
       </button>
 
-      <TaskForm       onAdd={addTask}    isOpen={formOpen}      onClose={() => setFormOpen(false)}/>
-      <EditTaskModal  key={editingTask?.id} task={editingTask}  isOpen={!!editingTask} onClose={() => setEditingTask(null)} onSave={editTask}/>
-      <ProfileModal   isOpen={profileOpen}  onClose={() => setProfileOpen(false)}  user={user}     onSave={saveUser}/>
-      <SettingsModal  isOpen={settingsOpen} onClose={() => setSettingsOpen(false)} settings={settings} onUpdate={updateSetting}/>
-      <AlarmModal     task={alarmTask} snoozeMinutes={settings.snoozeMinutes} onDismiss={handleDismiss} onSnooze={handleSnooze}/>
+      {/* Modals */}
+      <TaskForm
+        onAdd={addTask}
+        isOpen={formOpen}
+        onClose={() => setFormOpen(false)}
+      />
+      <EditTaskModal
+        key={editingTask?.id}
+        task={editingTask}
+        isOpen={!!editingTask}
+        onClose={() => setEditingTask(null)}
+        onSave={editTask}
+      />
+      <ProfileModal
+        isOpen={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        user={user}
+        onSave={saveUser}
+      />
+      <SettingsModal
+        isOpen={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        settings={settings}
+        onUpdate={updateSetting}
+      />
+      <AlarmModal
+        task={alarmTask}
+        snoozeMinutes={settings.snoozeMinutes}
+        onDismiss={handleDismiss}
+        onSnooze={handleSnooze}
+      />
       <PushToast/>
     </div>
   )
