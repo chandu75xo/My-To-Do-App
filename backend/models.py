@@ -104,3 +104,11 @@ class PushSubscription(db.Model):
 
     def to_dict(self):
         return {'endpoint': self.endpoint, 'keys': {'p256dh': self.p256dh, 'auth': self.auth}}
+
+
+class FcmToken(db.Model):
+    __tablename__ = 'fcm_tokens'
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    token      = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.utcnow())

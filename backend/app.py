@@ -10,6 +10,7 @@ from routes.tasks_complete import complete_bp
 from routes.push         import push_bp
 from routes.admin        import admin_bp
 from routes.debug        import debug_bp
+from routes.push_fcm import push_fcm_bp
 
 
 def run_migrations(app):
@@ -65,6 +66,7 @@ def create_app():
     app.register_blueprint(push_bp,     url_prefix='/api/push')
     app.register_blueprint(admin_bp,    url_prefix='/api/admin')
     app.register_blueprint(debug_bp,    url_prefix='/api/debug')
+    app.register_blueprint(push_fcm_bp, url_prefix='/api/push')
 
     @app.route('/api/health')
     def health():
