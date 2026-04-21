@@ -1,13 +1,11 @@
-# push_service.py — v5d
-# Updated to include task_id and complete_token in payload
-# so the Service Worker can offer "Mark as complete" action.
+# push_service.py — v6a
+# Passes notification type so Service Worker can style appropriately
 
 import json, os
 from pywebpush import webpush, WebPushException
 
 
 def generate_completion_token(task_id, user_id):
-    """Short-lived JWT that authorises completing one specific task."""
     from flask_jwt_extended import create_access_token
     from datetime import timedelta
     return create_access_token(
@@ -18,7 +16,8 @@ def generate_completion_token(task_id, user_id):
 
 
 def send_push_notification(subscription_dict, title, body,
-                           url='/', task_id=None, user_id=None):
+                           url='/', task_id=None, user_id=None,
+                           notif_type='reminder'):
     from flask import current_app
 
     vapid_private = current_app.config.get('VAPID_PRIVATE_KEY')
@@ -30,17 +29,14 @@ def send_push_notification(subscription_dict, title, body,
 
     backend_url = os.getenv('BACKEND_URL', '').rstrip('/')
 
-    # Build payload — service worker reads all these fields
     data = {
         'title': title,
         'body':  body,
         'url':   url,
-        'icon':  '/favicon.svg',
-        'badge': '/favicon.svg',
-        'tag':   f'task-{task_id}' if task_id else 'done-app',
+        'type':  notif_type,   # passed to SW for visual treatment
+        'tag':   f'done-task-{task_id}' if task_id else 'done-reminder',
     }
 
-    # Include completion token if we have task + user
     if task_id and user_id and backend_url:
         try:
             token = generate_completion_token(task_id, user_id)
@@ -48,14 +44,12 @@ def send_push_notification(subscription_dict, title, body,
             data['completeUrl']   = f'{backend_url}/api/tasks/complete-token'
             data['taskId']        = task_id
         except Exception as e:
-            print(f'[Push] Could not generate completion token: {e}', flush=True)
-
-    payload = json.dumps(data)
+            print(f'[Push] Completion token error: {e}', flush=True)
 
     try:
         webpush(
             subscription_info = subscription_dict,
-            data              = payload,
+            data              = json.dumps(data),
             vapid_private_key = vapid_private,
             vapid_claims      = {'sub': f'mailto:{vapid_email}'},
             content_encoding  = 'aes128gcm',
@@ -64,11 +58,10 @@ def send_push_notification(subscription_dict, title, body,
 
     except WebPushException as e:
         if e.response and e.response.status_code == 410:
-            print(f'[Push] Subscription expired (410)', flush=True)
             return '410'
         print(f'[Push] WebPushException: {e}', flush=True)
         return False
 
     except Exception as e:
-        print(f'[Push] Unexpected error: {e}', flush=True)
+        print(f'[Push] Error: {e}', flush=True)
         return False

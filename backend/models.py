@@ -38,6 +38,8 @@ class Task(db.Model):
     done               = db.Column(db.Boolean,     nullable=False, default=False)
     recurrence         = db.Column(db.String(20),  nullable=False, default='none')
     utc_offset_minutes = db.Column(db.Integer,     nullable=False, default=0)
+    overdue_push_last_at = db.Column(db.DateTime, nullable=True, default=None)
+    overdue_email_last_date = db.Column(db.String(10), nullable=True, default=None)
     # 6 independent notification flags (3 push + 3 email)
     push_before_sent   = db.Column(db.Boolean, nullable=False, default=False)
     push_due_sent      = db.Column(db.Boolean, nullable=False, default=False)
