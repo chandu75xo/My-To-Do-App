@@ -89,7 +89,7 @@ export default function App() {
 
   // ── Data hooks ───────────────────────────────────────────────────────────────
   const {
-    tasks, loading: tasksLoading,
+    tasks, allTasks, loading: tasksLoading,
     addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted,
     addSubtask, toggleSubtask, deleteSubtask,
   } = useTasks(user)
@@ -161,7 +161,7 @@ export default function App() {
 
   if (statsOpen) return (
     <div className={darkMode ? 'dark' : ''}>
-      <StatsScreen tasks={tasks} onClose={() => setStatsOpen(false)}/>
+      <StatsScreen tasks={allTasks} onClose={() => setStatsOpen(false)}/>
     </div>
   )
 

@@ -1,107 +1,207 @@
-# done. — Personal Todo App
+# Done — Todo PWA
 
-## v1 — React + Vite + Tailwind (local only, no backend)
+A full-stack Progressive Web App for managing tasks with reminders, statistics, and push notifications.
 
----
-
-## What you need installed first
-
-### 1. Node.js
-Node.js lets you run JavaScript outside the browser — on your computer.
-Vite and React's build tools run on Node.
-Download from: https://nodejs.org (pick the LTS version)
-
-Check it installed correctly:
-```bash
-node --version    # should print something like v20.x.x
-npm --version     # should print something like 10.x.x
-```
-
-### 2. VS Code (recommended editor)
-Download from: https://code.visualstudio.com
-Install these extensions:
-- "ES7+ React/Redux/React-Native snippets"
-- "Tailwind CSS IntelliSense"
-- "Prettier - Code formatter"
+**Live:** [done-todoapp.netlify.app](https://done-todoapp.netlify.app)  
+**Backend:** Hosted on Render (Python/Flask)  
+**Database:** Neon (PostgreSQL, free tier)
 
 ---
 
-## Running the app locally
+## Tech Stack
 
-Open your terminal (or VS Code's built-in terminal) and run these commands one at a time:
-
-```bash
-# 1. Go into the project folder
-cd todo-app
-
-# 2. Install all dependencies
-#    This reads package.json and downloads everything into a node_modules/ folder
-#    Only needed once (or after pulling new code from GitHub)
-npm install
-
-# 3. Start the development server
-npm run dev
-```
-
-Vite will print something like:
-```
-  VITE v5.x.x  ready in 300ms
-  ➜  Local:   http://localhost:5173/
-```
-
-Open http://localhost:5173 in your browser — your app is running!
-
-**Hot reload**: Every time you save a file, the browser updates instantly.
-You don't need to refresh manually.
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, Vite, Tailwind CSS |
+| Backend | Python 3, Flask, Flask-JWT-Extended |
+| Database | PostgreSQL via Neon (free tier) |
+| Auth | JWT (30-day tokens, auto-refresh) |
+| Push | Web Push API (VAPID) |
+| Email | Configurable SMTP |
+| Scheduler | APScheduler (BackgroundScheduler) |
+| Hosting | Netlify (frontend) + Render (backend) |
 
 ---
 
-## Project structure explained
+## Features
+
+- **Task management** — create, edit, delete tasks with tags, priorities, due dates/times, notes, subtasks, and recurrence
+- **Push notifications** — T-15min, T+0, T+15min, then every 4 hours while overdue
+- **Email reminders** — for important tasks at due time and daily while overdue
+- **Statistics** — completion rate, streaks, bar charts, and category breakdowns across 6 selectable time ranges
+- **Dark mode** — full system-aware dark theme
+- **PWA** — installable, works offline for viewing cached tasks
+- **Analog clock picker** — for selecting due times
+
+---
+
+## Project Structure
 
 ```
 todo-app/
-│
-├── index.html              ← The ONE html file — React loads inside this
-├── package.json            ← Lists all dependencies + npm scripts
-├── vite.config.js          ← Tells Vite how to build the app
-├── tailwind.config.js      ← Tailwind CSS configuration
-├── postcss.config.js       ← Required by Tailwind (processes CSS)
-│
+├── backend/
+│   ├── app.py                    # Flask app factory, DB migrations, startup
+│   ├── app_instance.py           # Shared db/app instance (avoids circular imports)
+│   ├── models.py                 # SQLAlchemy models
+│   ├── routes/
+│   │   ├── auth.py               # Login, signup, OTP, /me (with JWT auto-refresh)
+│   │   ├── tasks.py              # CRUD, subtasks, clear-completed, /archived
+│   │   ├── push.py               # Web Push subscription management
+│   │   └── admin.py              # Admin monitoring (no task content exposed)
+│   └── services/
+│       ├── reminder.py           # APScheduler: push/email reminders + daily cleanup
+│       ├── push_service.py       # Web Push notification sender
+│       └── email_service.py      # SMTP email sender
 └── src/
-    ├── main.jsx            ← Entry point: mounts React into index.html
-    ├── App.jsx             ← Root component: layout + global state
-    ├── index.css           ← Global styles + Tailwind directives
-    │
+    ├── App.jsx                   # Root component, routing, auth state
+    ├── hooks/
+    │   ├── useTasks.js           # Task state, optimistic updates, allTasks for stats
+    │   └── useAuth.js            # Auth state, token management
     ├── components/
-    │   ├── Header.jsx      ← Top bar: app name, date, dark mode toggle
-    │   ├── TagFilter.jsx   ← Horizontal tag chips (All, Work, Home...)
-    │   ├── TaskList.jsx    ← Renders pending + completed task groups
-    │   ├── TaskCard.jsx    ← Single task row with check + delete
-    │   └── TaskForm.jsx    ← Modal form: add task + templates
-    │
-    └── hooks/
-        └── useTasks.js     ← All task logic: add, toggle, delete, localStorage
+    │   ├── StatsScreen.jsx       # Statistics with 6 time ranges + bar charts
+    │   ├── ClockPicker.jsx       # Analog clock time selector (dark mode fixed)
+    │   └── ...                   # Other UI components
+    └── services/
+        └── api.js                # Axios/fetch wrapper for all API calls
 ```
 
 ---
 
-## Deploying to Netlify (free)
+## Environment Variables
 
-1. Push this project to a GitHub repository
-2. Go to https://netlify.com and sign up (free, no card)
-3. Click "Add new site" → "Import an existing project" → connect GitHub
-4. Set these build settings:
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-5. Click Deploy — Netlify gives you a free URL like `done-app.netlify.app`
+### Backend (Render)
+```
+DATABASE_URL          # Neon PostgreSQL connection string
+JWT_SECRET_KEY        # Random secret for signing JWT tokens
+ADMIN_SECRET          # Secret for accessing /api/admin/* endpoints
+VAPID_PRIVATE_KEY     # Web Push VAPID private key
+VAPID_PUBLIC_KEY      # Web Push VAPID public key
+VAPID_EMAIL           # mailto: for VAPID contact
+SMTP_HOST             # SMTP server hostname
+SMTP_PORT             # SMTP port (usually 587)
+SMTP_USER             # SMTP username
+SMTP_PASSWORD         # SMTP password
+FRONTEND_URL          # https://done-todoapp.netlify.app
+```
 
-Every time you push to GitHub, Netlify automatically redeploys. 
+### Frontend (Netlify)
+```
+VITE_API_URL          # https://your-backend.onrender.com
+VITE_VAPID_PUBLIC_KEY # Web Push VAPID public key (same as backend)
+```
 
 ---
 
-## What's coming in v2
+## Session & Auth
 
-- Flask REST API (Python backend)
-- SQLite database (local) → MySQL (production)
-- User login with JWT tokens
-- Tasks sync across all your devices
+Sessions use **JWT tokens with a 30-day expiry** stored in `localStorage`.
+
+| Scenario | Behaviour |
+|---|---|
+| Active user (visits daily) | Never logged out — token auto-refreshes when <7 days remain |
+| Inactive user (no visit for 30+ days) | Automatically logged out — token expired |
+| Tab left open indefinitely | Session stays valid until token expires |
+| Browser closed & reopened | Session persists (localStorage survives browser restarts) |
+
+Auto-refresh happens silently on every `/api/auth/me` call. When a token has fewer than 7 days left the server issues a fresh 30-day token in the response body. The frontend stores it automatically.
+
+---
+
+## Task Lifecycle & DB Efficiency
+
+To keep the Neon free tier (0.5GB) lean, tasks follow a three-stage lifecycle:
+
+```
+Active → (marked done) → Done (still visible on homepage)
+Done → (30 days old OR user clicks "Clear completed") → Archived (hidden from homepage, counted in stats)
+Archived → (90 days old) → Permanently deleted
+```
+
+**Key rule:** "Clear completed" archives tasks — it does NOT delete them. Statistics always include archived tasks, so completion counts are never lost.
+
+The daily cleanup job runs at **02:00 UTC** and:
+1. Archives done tasks where `completed_at` is older than 30 days
+2. Permanently deletes archived tasks where `completed_at` is older than 90 days  
+3. Deletes OTP verification codes older than 30 minutes
+
+---
+
+## Statistics Time Ranges
+
+Statistics are computed **client-side** from `allTasks` (active + archived combined):
+
+| Range | Period |
+|---|---|
+| This Week | Monday to today |
+| This Month | 1st of current month to today |
+| Last Month | Full previous calendar month |
+| Last 3 Months | Rolling 90 days |
+| This Year | January 1st to today |
+| All Time | Everything ever completed |
+
+The bar chart adapts: daily bars for periods ≤31 days, weekly bars for longer periods.
+
+---
+
+## Admin Dashboard
+
+Protected by the `ADMIN_SECRET` environment variable (passed as `?secret=` query param).
+
+**Task content is never exposed.** Admin endpoints return counts only.
+
+| Endpoint | What it shows |
+|---|---|
+| `GET /api/admin/stats` | User counts, task counts, overdue tasks, push subscriptions, pending OTPs, 7-day and 30-day activity |
+| `GET /api/admin/users` | User list with name, email, task count, push sub count, join date |
+| `GET /api/admin/health` | DB connectivity status, scheduler running status |
+
+---
+
+## Notification Schedule
+
+For each task with a due date/time:
+
+```
+T-15min  → push notification + email (important tasks only)
+T+0      → push notification + email (important tasks only)
+T+15min  → push notification + email (first overdue alert)
+T+15 + 4h intervals → push notification every 4h while task remains incomplete
+Daily    → one email per calendar day while overdue (important tasks only)
+```
+
+All timing is UTC-aware using the user's stored `utc_offset_minutes`.
+
+---
+
+## Running Locally
+
+### Backend
+```bash
+cd backend
+pip install -r requirements.txt
+export DATABASE_URL=postgresql://...
+export JWT_SECRET_KEY=dev-secret
+flask run --port 5000
+```
+
+### Frontend
+```bash
+npm install
+echo "VITE_API_URL=http://localhost:5000" > .env.local
+npm run dev
+```
+
+---
+
+## Deployment
+
+### Backend → Render
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn app:app`
+- Set all environment variables in the Render dashboard
+
+### Frontend → Netlify
+- Build command: `npm run build`
+- Publish directory: `dist`
+- Set `VITE_API_URL` and `VITE_VAPID_PUBLIC_KEY` in Netlify environment variables
+- Add `_redirects` file in `public/`: `/* /index.html 200`

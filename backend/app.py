@@ -35,6 +35,8 @@ def run_migrations(app):
             f"ALTER TABLE tasks ADD COLUMN {ifn} email_after_sent BOOLEAN NOT NULL DEFAULT {bf}",
             f"ALTER TABLE tasks ADD COLUMN {ifn} overdue_push_last_at TIMESTAMP",
             f"ALTER TABLE tasks ADD COLUMN {ifn} overdue_email_last_date VARCHAR(10)",
+            f"ALTER TABLE tasks ADD COLUMN {ifn} archived BOOLEAN NOT NULL DEFAULT {bf}",
+            f"ALTER TABLE tasks ADD COLUMN {ifn} completed_at TIMESTAMP",
         ]
         conn = db.engine.raw_connection()
         try:

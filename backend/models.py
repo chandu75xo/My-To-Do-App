@@ -51,6 +51,9 @@ class Task(db.Model):
     reminder_sent      = db.Column(db.Boolean, nullable=False, default=False)
     push_sent          = db.Column(db.Boolean, nullable=False, default=False)
     due_push_sent      = db.Column(db.Boolean, nullable=False, default=False)
+    # Archive / cleanup columns
+    archived           = db.Column(db.Boolean, nullable=False, default=False)
+    completed_at       = db.Column(db.DateTime, nullable=True, default=None)
     created_at         = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
     subtasks           = db.relationship('Subtask', backref='task', cascade='all, delete-orphan',
                                          lazy=True, order_by='Subtask.created_at')
@@ -70,6 +73,8 @@ class Task(db.Model):
             'utcOffsetMinutes': self.utc_offset_minutes,
             'subtasks':         [s.to_dict() for s in self.subtasks],
             'createdAt':        self.created_at.isoformat(),
+            'completedAt':      self.completed_at.isoformat() if self.completed_at else None,
+            'archived':         self.archived,
         }
 
 

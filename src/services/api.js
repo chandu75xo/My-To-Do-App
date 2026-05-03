@@ -37,6 +37,7 @@ export const authApi = {
 
 export const tasksApi = {
   getAll:         ()                 => request('/api/tasks/'),
+  getArchived:    ()                 => request('/api/tasks/archived'),
   create:         (p)                => request('/api/tasks/',                        { method: 'POST',   body: JSON.stringify(p) }),
   update:         (id, p)            => request(`/api/tasks/${id}`,                   { method: 'PUT',    body: JSON.stringify(p) }),
   delete:         (id)               => request(`/api/tasks/${id}`,                   { method: 'DELETE' }),

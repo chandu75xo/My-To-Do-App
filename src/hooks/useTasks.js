@@ -31,14 +31,19 @@ export const RECURRENCE_OPTIONS = [
 ]
 
 export function useTasks(user) {
-  const [tasks,   setTasks]   = useState([])
-  const [loading, setLoading] = useState(false)
-  const [error,   setError]   = useState(null)
+  const [tasks,        setTasks]        = useState([])
+  const [archivedTasks, setArchivedTasks] = useState([])
+  const [loading,      setLoading]      = useState(false)
+  const [error,        setError]        = useState(null)
 
   // Stable fetch — always gets latest from server
   const fetchAll = useCallback(async () => {
-    const data = await tasksApi.getAll()
-    setTasks(data.tasks)
+    const [activeData, archivedData] = await Promise.all([
+      tasksApi.getAll(),
+      tasksApi.getArchived(),
+    ])
+    setTasks(activeData.tasks)
+    setArchivedTasks(archivedData.tasks)
   }, [])
 
   useEffect(() => {
@@ -173,7 +178,8 @@ export function useTasks(user) {
   }, [])
 
   return {
-    tasks, loading, error, fetchAll,
+    tasks, archivedTasks, allTasks: [...tasks, ...archivedTasks],
+    loading, error, fetchAll,
     addTask, editTask, toggleTask, toggleImportant, deleteTask, clearCompleted,
     addSubtask, toggleSubtask, deleteSubtask,
   }

@@ -30,7 +30,7 @@ def _next_due_date(due_date_str, recurrence):
 @jwt_required()
 def get_tasks():
     user_id = int(get_jwt_identity())
-    tasks   = Task.query.filter_by(user_id=user_id).order_by(Task.created_at.desc()).all()
+    tasks   = Task.query.filter_by(user_id=user_id, archived=False).order_by(Task.created_at.desc()).all()
     return jsonify({'tasks': [t.to_dict() for t in tasks]}), 200
 
 
@@ -85,7 +85,12 @@ def update_task(task_id):
     if 'dueDate'          in data: task.due_date      = data['dueDate'] or None
     if 'dueTime'          in data: task.due_time      = data['dueTime'] or None
     if 'important'        in data: task.important     = bool(data['important'])
-    if 'done'             in data: task.done          = bool(data['done'])
+    if 'done' in data:
+        task.done = bool(data['done'])
+        if task.done and not task.completed_at:
+            task.completed_at = datetime.now(timezone.utc)
+        elif not task.done:
+            task.completed_at = None
     if 'recurrence'       in data: task.recurrence    = data['recurrence']
     if 'utcOffsetMinutes' in data:
         try: task.utc_offset_minutes = int(data['utcOffsetMinutes'])
@@ -139,9 +144,23 @@ def delete_task(task_id):
 @jwt_required()
 def clear_completed():
     user_id = int(get_jwt_identity())
-    Task.query.filter_by(user_id=user_id, done=True).delete()
+    now     = datetime.now(timezone.utc)
+    # Archive (not delete) completed tasks so stats stay accurate
+    Task.query.filter_by(user_id=user_id, done=True, archived=False).update({
+        'archived':     True,
+        'completed_at': now,
+    })
     db.session.commit()
     return '', 204
+
+
+@tasks_bp.route('/archived', methods=['GET'])
+@jwt_required()
+def get_archived():
+    """Returns archived tasks (used only for statistics — no content shown on homepage)."""
+    user_id = int(get_jwt_identity())
+    tasks   = Task.query.filter_by(user_id=user_id, archived=True).order_by(Task.completed_at.desc()).all()
+    return jsonify({'tasks': [t.to_dict() for t in tasks]}), 200
 
 
 @tasks_bp.route('/<int:task_id>/subtasks', methods=['POST'])

@@ -181,7 +181,23 @@ def login():
 def get_me():
     user = User.query.get(int(get_jwt_identity()))
     if not user: return jsonify({'error': 'User not found'}), 404
-    return jsonify({'user': user.to_dict()}), 200
+
+    response = {'user': user.to_dict()}
+
+    # Auto-refresh: if token expires within 7 days, silently issue a fresh 30-day token
+    try:
+        from flask_jwt_extended import get_jwt
+        claims = get_jwt()
+        exp    = claims.get('exp', 0)
+        now_ts = datetime.now(timezone.utc).timestamp()
+        days_left = (exp - now_ts) / 86400
+        if days_left < 7:
+            new_token = create_access_token(identity=str(user.id))
+            response['token'] = new_token
+    except Exception:
+        pass  # never break /me due to refresh logic
+
+    return jsonify(response), 200
 
 
 @auth_bp.route('/profile', methods=['PUT'])

@@ -166,7 +166,7 @@ export default function ClockPicker({ value, onChange }) {
           onTouchEnd={onPointerUp}
         >
           {/* Clock background */}
-          <circle cx={CX} cy={CY} r={SIZE/2 - 4} fill="transparent" stroke="currentColor" strokeOpacity="0.08" strokeWidth="1"/>
+          <circle cx={CX} cy={CY} r={SIZE/2 - 4} fill="transparent" stroke="currentColor" strokeOpacity="0.15" strokeWidth="1.5"/>
 
           {/* Hour numbers */}
           {mode === 'hour' && Array.from({ length: 12 }, (_, i) => {
@@ -177,8 +177,8 @@ export default function ClockPicker({ value, onChange }) {
               <g key={h}>
                 {sel && <circle cx={pos.x} cy={pos.y} r="14" fill="#111827" className="dark:fill-white"/>}
                 <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
-                  fontSize="13" fontWeight={sel ? '500' : '400'}
-                  fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.7}
+                  fontSize="13" fontWeight={sel ? '600' : '400'}
+                  fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.9}
                   style={{ pointerEvents: 'none' }}>
                   {h}
                 </text>
@@ -196,8 +196,8 @@ export default function ClockPicker({ value, onChange }) {
                 <g key={m}>
                   {sel && <circle cx={pos.x} cy={pos.y} r="13" fill="#111827" className="dark:fill-white"/>}
                   <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
-                    fontSize="11" fontWeight={sel ? '500' : '400'}
-                    fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.7}
+                    fontSize="11" fontWeight={sel ? '600' : '400'}
+                    fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.9}
                     style={{ pointerEvents: 'none' }}>
                     {pad(m)}
                   </text>
@@ -209,7 +209,7 @@ export default function ClockPicker({ value, onChange }) {
               <g key={m}>
                 {sel && <circle cx={pos.x} cy={pos.y} r="10" fill="#111827" className="dark:fill-white"/>}
                 <circle cx={pos.x} cy={pos.y} r={sel ? 2 : 1.5}
-                  fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.3}
+                  fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.5}
                   style={{ pointerEvents: 'none' }}/>
               </g>
             )

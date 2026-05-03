@@ -240,13 +240,62 @@ def check_reminders(app):
             import traceback; traceback.print_exc()
 
 
-def start_scheduler(app):
+def daily_cleanup(app):
+    """Runs once per day at 02:00 UTC.
+    1. Archive done tasks older than 30 days (keeps stats, hides from homepage).
+    2. Permanently delete archived tasks older than 90 days (DB footprint control).
+    3. Delete OTP codes older than 30 minutes (never needed after that).
+    """
+    with app.app_context():
+        try:
+            from models import Task, OTPCode
+            from app_instance import db
+
+            now = datetime.utcnow()
+            cutoff_archive = now - timedelta(days=30)
+            cutoff_purge   = now - timedelta(days=90)
+            cutoff_otp     = now - timedelta(minutes=30)
+
+            # 1 — Archive done tasks older than 30 days
+            archived = Task.query.filter(
+                Task.done     == True,
+                Task.archived == False,
+                Task.completed_at != None,
+                Task.completed_at < cutoff_archive,
+            ).update({'archived': True})
+
+            # 2 — Purge archived tasks older than 90 days
+            to_purge = Task.query.filter(
+                Task.archived    == True,
+                Task.completed_at != None,
+                Task.completed_at < cutoff_purge,
+            ).all()
+            purged = len(to_purge)
+            for t in to_purge:
+                db.session.delete(t)
+
+            # 3 — Delete expired OTP codes
+            otp_deleted = OTPCode.query.filter(OTPCode.created_at < cutoff_otp).delete()
+
+            db.session.commit()
+            print(
+                f'[Cleanup] archived={archived} purged={purged} otps_deleted={otp_deleted}',
+                flush=True
+            )
+        except Exception as e:
+            print(f'[Cleanup] EXCEPTION: {e}', flush=True)
+            import traceback; traceback.print_exc()
+
+
+
     global _scheduler
     if _scheduler is not None and _scheduler.running:
         return _scheduler
     _scheduler = BackgroundScheduler(daemon=True)
     _scheduler.add_job(check_reminders, args=[app], trigger='interval',
                        seconds=30, id='reminder_check', max_instances=1, coalesce=True)
+    _scheduler.add_job(daily_cleanup, args=[app], trigger='cron',
+                       hour=2, minute=0, id='daily_cleanup', max_instances=1, coalesce=True)
     _scheduler.start()
-    print('[Scheduler] Started — every 30s', flush=True)
+    print('[Scheduler] Started — reminders every 30s, cleanup daily at 02:00 UTC', flush=True)
     return _scheduler
