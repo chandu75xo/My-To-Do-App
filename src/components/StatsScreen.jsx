@@ -1,4 +1,4 @@
-// StatsScreen.jsx — v6: time range selector + archived task support
+// StatsScreen.jsx — v7: 3 ranges, hover/tap count on bars
 import { useState } from 'react'
 
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -13,17 +13,13 @@ const TAG_LABELS = {
 
 const RANGES = [
   { id: 'this_week',     label: 'This Week' },
-  { id: 'this_month',    label: 'This Month' },
-  { id: 'last_month',    label: 'Last Month' },
-  { id: 'last_3_months', label: 'Last 3 Months' },
-  { id: 'this_year',     label: 'This Year' },
-  { id: 'all_time',      label: 'All Time' },
+  { id: 'this_month',   label: 'This Month' },
+  { id: 'last_90_days', label: 'Last 90 Days' },
 ]
 
 function getRangeBounds(rangeId) {
   const now   = new Date()
   const today = new Date(now); today.setHours(23, 59, 59, 999)
-
   switch (rangeId) {
     case 'this_week': {
       const start = new Date(now)
@@ -35,29 +31,17 @@ function getRangeBounds(rangeId) {
       const start = new Date(now.getFullYear(), now.getMonth(), 1)
       return { start, end: today }
     }
-    case 'last_month': {
-      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
-      const end   = new Date(now.getFullYear(), now.getMonth(), 0)
-      end.setHours(23, 59, 59, 999)
-      return { start, end }
-    }
-    case 'last_3_months': {
+    case 'last_90_days':
+    default: {
       const start = new Date(now)
-      start.setDate(now.getDate() - 90)
+      start.setDate(now.getDate() - 89)
       start.setHours(0, 0, 0, 0)
       return { start, end: today }
     }
-    case 'this_year': {
-      const start = new Date(now.getFullYear(), 0, 1)
-      return { start, end: today }
-    }
-    case 'all_time':
-    default:
-      return { start: new Date(0), end: today }
   }
 }
 
-// Returns the effective completion date for a task (completedAt > dueDate > createdAt)
+// Effective completion date for a task
 function taskDate(t) {
   if (t.completedAt) return new Date(t.completedAt)
   if (t.dueDate)     return new Date(t.dueDate + 'T00:00:00')
@@ -67,10 +51,10 @@ function taskDate(t) {
 
 function computeStreak(tasks) {
   const doneDates = new Set(
-    tasks.filter(t => t.done || t.archived).map(t => {
-      const d = taskDate(t)
-      return d ? d.toISOString().split('T')[0] : null
-    }).filter(Boolean)
+    tasks
+      .filter(t => t.done || t.archived)
+      .map(t => { const d = taskDate(t); return d ? d.toISOString().split('T')[0] : null })
+      .filter(Boolean)
   )
   let streak = 0
   const d = new Date(); d.setHours(0, 0, 0, 0)
@@ -84,56 +68,50 @@ function computeStreak(tasks) {
   return streak
 }
 
-// Build last-N-days bar chart data
-function buildBarData(tasks, rangeId, start, end) {
-  // For short ranges, show daily bars; for long ranges, show weekly
+function buildBarData(tasks, start, end) {
   const diffDays = Math.round((end - start) / 86400000)
+
   if (diffDays <= 31) {
     // Daily bars
     const days = []
-    const d    = new Date(start)
-    while (d <= end) {
-      const ds = d.toISOString().split('T')[0]
+    const cursor = new Date(start)
+    while (cursor <= end) {
+      const ds = cursor.toISOString().split('T')[0]
       days.push({
-        label:   DAY_LABELS[d.getDay()],
+        label:   DAY_LABELS[cursor.getDay()],
         dateStr: ds,
         isToday: ds === new Date().toISOString().split('T')[0],
+        count:   0,
       })
-      d.setDate(d.getDate() + 1)
+      cursor.setDate(cursor.getDate() + 1)
     }
-    return days.map(day => ({
-      ...day,
-      count: tasks.filter(t => {
-        if (!(t.done || t.archived)) return false
-        const td = taskDate(t)
-        return td && td.toISOString().split('T')[0] === day.dateStr
-      }).length,
-    }))
+    tasks.forEach(t => {
+      if (!(t.done || t.archived)) return
+      const td = taskDate(t); if (!td) return
+      const ds = td.toISOString().split('T')[0]
+      const entry = days.find(d => d.dateStr === ds)
+      if (entry) entry.count++
+    })
+    return days
   } else {
-    // Weekly bars
+    // Weekly bars — align to Sunday
     const weeks = []
     const cursor = new Date(start)
-    cursor.setDate(cursor.getDate() - cursor.getDay()) // align to Sunday
+    cursor.setDate(cursor.getDate() - cursor.getDay())
     while (cursor <= end) {
       const ws = new Date(cursor)
-      const we = new Date(cursor); we.setDate(we.getDate() + 6)
-      weeks.push({
-        label:   `${ws.getMonth()+1}/${ws.getDate()}`,
-        start:   new Date(ws),
-        end:     new Date(we),
-        isToday: false,
-      })
+      const we = new Date(cursor); we.setDate(we.getDate() + 6); we.setHours(23,59,59,999)
+      const mo = ws.getMonth() + 1
+      weeks.push({ label: `${mo}/${ws.getDate()}`, start: new Date(ws), end: new Date(we), isToday: false, count: 0 })
       cursor.setDate(cursor.getDate() + 7)
     }
-    return weeks.map(w => ({
-      label:   w.label,
-      isToday: false,
-      count: tasks.filter(t => {
-        if (!(t.done || t.archived)) return false
-        const td = taskDate(t)
-        return td && td >= w.start && td <= w.end
-      }).length,
-    }))
+    tasks.forEach(t => {
+      if (!(t.done || t.archived)) return
+      const td = taskDate(t); if (!td) return
+      const w = weeks.find(w => td >= w.start && td <= w.end)
+      if (w) w.count++
+    })
+    return weeks
   }
 }
 
@@ -155,60 +133,132 @@ const ICONS = {
   total:  'M9 5H7a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h0a2 2 0 002-2M9 5a2 2 0 012-2h0a2 2 0 012 2',
 }
 
+// Bar chart with hover + tap tooltip
+function BarChart({ barData, rangeLabel }) {
+  const [activeIdx, setActiveIdx] = useState(null)
+  const maxBar = Math.max(...barData.map(d => d.count), 1)
+
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-gray-400 dark:text-gray-500"><Icon path={ICONS.chart} size={16}/></span>
+        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{rangeLabel} Activity</p>
+      </div>
+
+      <div className="flex items-end gap-1" style={{ height: '96px' }}>
+        {barData.map((d, i) => {
+          const isActive = activeIdx === i
+          const barH = Math.max((d.count / maxBar) * 72, d.count > 0 ? 6 : 2)
+
+          return (
+            <div
+              key={i}
+              className="flex-1 min-w-[18px] flex flex-col items-center gap-1 cursor-pointer select-none"
+              onMouseEnter={() => setActiveIdx(i)}
+              onMouseLeave={() => setActiveIdx(null)}
+              onTouchStart={() => setActiveIdx(idx => idx === i ? null : i)}
+            >
+              {/* Count label — always reserve space, show when active or count > 0 */}
+              <span
+                className="text-xs tabular-nums font-medium transition-all duration-150"
+                style={{
+                  color: isActive
+                    ? 'rgb(17 24 39)' // gray-900
+                    : d.count > 0
+                    ? 'rgb(156 163 175)' // gray-400
+                    : 'transparent',
+                  // dark handled via filter trick — we use inline for simplicity
+                }}
+              >
+                {d.count > 0 ? d.count : '0'}
+              </span>
+
+              {/* Bar */}
+              <div className="w-full flex flex-col justify-end" style={{ height: '72px' }}>
+                <div
+                  className={`w-full rounded-t-md transition-all duration-200 ${
+                    isActive
+                      ? 'bg-gray-700 dark:bg-gray-200'
+                      : d.isToday
+                      ? 'bg-gray-900 dark:bg-white'
+                      : 'bg-gray-200 dark:bg-gray-600'
+                  }`}
+                  style={{ height: `${barH}px` }}
+                />
+              </div>
+
+              {/* Day label */}
+              <span className={`text-xs leading-none ${
+                d.isToday
+                  ? 'font-semibold text-gray-900 dark:text-white'
+                  : isActive
+                  ? 'text-gray-700 dark:text-gray-200'
+                  : 'text-gray-400 dark:text-gray-500'
+              }`}>
+                {d.label}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Mobile hint */}
+      <p className="text-xs text-gray-300 dark:text-gray-700 text-center mt-3">
+        Tap a bar to see count
+      </p>
+    </div>
+  )
+}
+
 export default function StatsScreen({ tasks, onClose }) {
-  // tasks here = allTasks (active + archived) from App.jsx
   const [range, setRange] = useState('this_week')
+  const { start, end }    = getRangeBounds(range)
 
-  const { start, end } = getRangeBounds(range)
-
-  // Tasks completed/done within the selected range
   const inRange = tasks.filter(t => {
     if (!(t.done || t.archived)) return false
     const d = taskDate(t)
     return d && d >= start && d <= end
   })
 
-  // Total tasks created in range (for completion rate)
   const createdInRange = tasks.filter(t => {
     const d = t.createdAt ? new Date(t.createdAt) : null
     return d && d >= start && d <= end
   })
 
-  const totalDone  = inRange.length
-  const totalInRange = createdInRange.length
-  const rate       = totalInRange > 0 ? Math.round((totalDone / totalInRange) * 100) : 0
-  const streak     = computeStreak(tasks)
+  const totalDone    = inRange.length
+  const totalCreated = createdInRange.length
+  const rate         = totalCreated > 0 ? Math.round((totalDone / totalCreated) * 100) : 0
+  const streak       = computeStreak(tasks)
 
-  // Today's completions (always relative to today regardless of range)
-  const todayStr   = new Date().toISOString().split('T')[0]
-  const todayDone  = tasks.filter(t => {
+  const todayStr  = new Date().toISOString().split('T')[0]
+  const todayDone = tasks.filter(t => {
     if (!(t.done || t.archived)) return false
     const d = taskDate(t)
     return d && d.toISOString().split('T')[0] === todayStr
   }).length
 
-  const barData  = buildBarData(tasks, range, start, end)
-  const maxBar   = Math.max(...barData.map(d => d.count), 1)
+  const barData = buildBarData(tasks, start, end)
 
   const tagCounts = {}
   inRange.forEach(t => { tagCounts[t.tag] = (tagCounts[t.tag] || 0) + 1 })
   const tagEntries = Object.entries(tagCounts).sort((a, b) => b[1] - a[1])
 
   const dayTotals = Array(7).fill(0)
-  inRange.filter(t => taskDate(t)).forEach(t => {
-    dayTotals[taskDate(t).getDay()]++
-  })
+  inRange.filter(t => taskDate(t)).forEach(t => { dayTotals[taskDate(t).getDay()]++ })
   const bestDay = DAY_LABELS[dayTotals.indexOf(Math.max(...dayTotals))]
 
   const metrics = [
-    { value: todayDone,  label: 'Done Today',       sub: 'tasks completed today',              iconPath: ICONS.check  },
-    { value: totalDone,  label: 'Completed',         sub: `in selected period`,                 iconPath: ICONS.total  },
-    { value: `${streak}d`, label: 'Current Streak', sub: streak === 1 ? '1 day in a row' : `${streak} days in a row`, iconPath: ICONS.fire },
-    { value: `${rate}%`, label: 'Completion Rate',  sub: `${totalDone} of ${totalInRange} tasks`, iconPath: ICONS.rate },
+    { value: todayDone,    label: 'Done Today',       sub: 'tasks completed today',                       iconPath: ICONS.check },
+    { value: totalDone,    label: 'Completed',         sub: 'in selected period',                          iconPath: ICONS.total },
+    { value: `${streak}d`, label: 'Current Streak',    sub: streak === 1 ? '1 day in a row' : `${streak} days in a row`, iconPath: ICONS.fire  },
+    { value: `${rate}%`,   label: 'Completion Rate',   sub: `${totalDone} of ${totalCreated} tasks`,       iconPath: ICONS.rate  },
   ]
+
+  const rangeLabel = RANGES.find(r => r.id === range)?.label ?? ''
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 font-sans">
+
       {/* Header */}
       <div className="sticky top-0 z-10 bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
@@ -219,23 +269,18 @@ export default function StatsScreen({ tasks, onClose }) {
           <p className="font-serif text-xl text-gray-900 dark:text-white">Statistics</p>
         </div>
 
-        {/* Time range selector */}
-        <div className="max-w-2xl mx-auto px-4 pb-3 overflow-x-auto">
-          <div className="flex gap-2 w-max">
-            {RANGES.map(r => (
-              <button
-                key={r.id}
-                onClick={() => setRange(r.id)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
-                  range === r.id
-                    ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
-                }`}
-              >
-                {r.label}
-              </button>
-            ))}
-          </div>
+        {/* Range pills */}
+        <div className="max-w-2xl mx-auto px-4 pb-3 flex gap-2">
+          {RANGES.map(r => (
+            <button key={r.id} onClick={() => setRange(r.id)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                range === r.id
+                  ? 'bg-gray-900 dark:bg-white text-white dark:text-gray-900'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}>
+              {r.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -246,12 +291,8 @@ export default function StatsScreen({ tasks, onClose }) {
           {metrics.map((m, i) => (
             <div key={i} className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4">
               <div className="flex items-start justify-between mb-2">
-                <p className="font-serif text-3xl text-gray-900 dark:text-white font-medium leading-none">
-                  {m.value}
-                </p>
-                <span className="text-gray-300 dark:text-gray-600">
-                  <Icon path={m.iconPath} size={16}/>
-                </span>
+                <p className="font-serif text-3xl text-gray-900 dark:text-white font-medium leading-none">{m.value}</p>
+                <span className="text-gray-300 dark:text-gray-600"><Icon path={m.iconPath} size={16}/></span>
               </div>
               <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{m.label}</p>
               <p className="text-xs text-gray-400 dark:text-gray-600 mt-0.5">{m.sub}</p>
@@ -275,36 +316,7 @@ export default function StatsScreen({ tasks, onClose }) {
         )}
 
         {/* Bar chart */}
-        <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-gray-400 dark:text-gray-500">
-              <Icon path={ICONS.chart} size={16}/>
-            </span>
-            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-              {RANGES.find(r => r.id === range)?.label} Activity
-            </p>
-          </div>
-          <div className="flex items-end gap-1 h-28 overflow-x-auto">
-            {barData.map((d, i) => (
-              <div key={i} className="flex-1 min-w-[20px] flex flex-col items-center gap-1.5">
-                <span className="text-xs tabular-nums text-gray-400 dark:text-gray-500">
-                  {d.count > 0 ? d.count : ''}
-                </span>
-                <div className="w-full flex flex-col justify-end" style={{ height: '72px' }}>
-                  <div
-                    className={`w-full rounded-t-lg transition-all duration-500 ${
-                      d.isToday ? 'bg-gray-900 dark:bg-white' : 'bg-gray-200 dark:bg-gray-600'
-                    }`}
-                    style={{ height: `${Math.max((d.count / maxBar) * 72, d.count > 0 ? 6 : 2)}px` }}
-                  />
-                </div>
-                <span className={`text-xs ${d.isToday ? 'font-semibold text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-                  {d.label}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <BarChart barData={barData} rangeLabel={rangeLabel} />
 
         {/* Tag breakdown */}
         {tagEntries.length > 0 && (

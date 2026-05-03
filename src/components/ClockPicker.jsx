@@ -106,8 +106,17 @@ export default function ClockPicker({ value, onChange }) {
 
   const activePos = mode === 'hour' ? hourPos : minutePos
 
+  const css = [
+    '.clock-num{fill:#111827}',
+    '.clock-dot{fill:#374151}',
+    ':is(.dark) .clock-num{fill:#f9fafb}',
+    ':is(.dark) .clock-dot{fill:#d1d5db}',
+    '@media(prefers-color-scheme:dark){.clock-num{fill:#f9fafb}.clock-dot{fill:#d1d5db}}',
+  ].join('')
+
   return (
     <div className="select-none" style={{ userSelect: 'none' }}>
+      <style>{css}</style>
       {/* Time display + AM/PM */}
       <div className="flex items-center justify-center gap-3 mb-4">
         <div className="flex items-baseline gap-1">
@@ -178,7 +187,7 @@ export default function ClockPicker({ value, onChange }) {
                 {sel && <circle cx={pos.x} cy={pos.y} r="14" fill="#111827" className="dark:fill-white"/>}
                 <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
                   fontSize="13" fontWeight={sel ? '600' : '400'}
-                  fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.9}
+                  className={sel ? '' : 'clock-num'} fill={sel ? 'white' : undefined} fillOpacity="1"
                   style={{ pointerEvents: 'none' }}>
                   {h}
                 </text>
@@ -197,7 +206,7 @@ export default function ClockPicker({ value, onChange }) {
                   {sel && <circle cx={pos.x} cy={pos.y} r="13" fill="#111827" className="dark:fill-white"/>}
                   <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
                     fontSize="11" fontWeight={sel ? '600' : '400'}
-                    fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.9}
+                    className={sel ? '' : 'clock-num'} fill={sel ? 'white' : undefined} fillOpacity="1"
                     style={{ pointerEvents: 'none' }}>
                     {pad(m)}
                   </text>
@@ -209,7 +218,7 @@ export default function ClockPicker({ value, onChange }) {
               <g key={m}>
                 {sel && <circle cx={pos.x} cy={pos.y} r="10" fill="#111827" className="dark:fill-white"/>}
                 <circle cx={pos.x} cy={pos.y} r={sel ? 2 : 1.5}
-                  fill={sel ? 'white' : 'currentColor'} fillOpacity={sel ? 1 : 0.5}
+                  className={sel ? '' : 'clock-dot'} fill={sel ? 'white' : undefined} fillOpacity="0.7"
                   style={{ pointerEvents: 'none' }}/>
               </g>
             )
