@@ -288,6 +288,7 @@ def daily_cleanup(app):
 
 
 
+def start_scheduler(app):
     global _scheduler
     if _scheduler is not None and _scheduler.running:
         return _scheduler
