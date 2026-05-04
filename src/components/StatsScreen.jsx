@@ -13,8 +13,9 @@ const TAG_LABELS = {
 
 const RANGES = [
   { id: 'this_week',     label: 'This Week' },
-  { id: 'this_month',   label: 'This Month' },
-  { id: 'last_90_days', label: 'Last 90 Days' },
+  { id: 'this_month',    label: 'This Month' },
+  { id: 'last_month',    label: 'Last Month' },
+  { id: 'last_90_days',  label: 'Last 90 Days' },
 ]
 
 function getRangeBounds(rangeId) {
@@ -22,10 +23,20 @@ function getRangeBounds(rangeId) {
   const today = new Date(now); today.setHours(23, 59, 59, 999)
   switch (rangeId) {
     case 'this_week': {
+      // Always show full Sun–Sat regardless of current day
       const start = new Date(now)
       start.setDate(now.getDate() - now.getDay())
       start.setHours(0, 0, 0, 0)
-      return { start, end: today }
+      const end = new Date(start)
+      end.setDate(start.getDate() + 6)
+      end.setHours(23, 59, 59, 999)
+      return { start, end }
+    }
+    case 'last_month': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1)
+      const end   = new Date(now.getFullYear(), now.getMonth(), 0)
+      end.setHours(23, 59, 59, 999)
+      return { start, end }
     }
     case 'this_month': {
       const start = new Date(now.getFullYear(), now.getMonth(), 1)
@@ -133,7 +144,7 @@ const ICONS = {
   total:  'M9 5H7a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h0a2 2 0 002-2M9 5a2 2 0 012-2h0a2 2 0 012 2',
 }
 
-// Bar chart with hover + tap tooltip
+// Bar chart — count only shows on hover (desktop) or tap (mobile)
 function BarChart({ barData, rangeLabel }) {
   const [activeIdx, setActiveIdx] = useState(null)
   const maxBar = Math.max(...barData.map(d => d.count), 1)
@@ -156,43 +167,37 @@ function BarChart({ barData, rangeLabel }) {
               className="flex-1 min-w-[18px] flex flex-col items-center gap-1 cursor-pointer select-none"
               onMouseEnter={() => setActiveIdx(i)}
               onMouseLeave={() => setActiveIdx(null)}
-              onTouchStart={() => setActiveIdx(idx => idx === i ? null : i)}
+              onTouchStart={(e) => { e.preventDefault(); setActiveIdx(prev => prev === i ? null : i) }}
             >
-              {/* Count label — always reserve space, show when active or count > 0 */}
-              <span
-                className="text-xs tabular-nums font-medium transition-all duration-150"
-                style={{
-                  color: isActive
-                    ? 'rgb(17 24 39)' // gray-900
-                    : d.count > 0
-                    ? 'rgb(156 163 175)' // gray-400
-                    : 'transparent',
-                  // dark handled via filter trick — we use inline for simplicity
-                }}
-              >
-                {d.count > 0 ? d.count : '0'}
+              {/* Count — only visible when this bar is active (hovered/tapped) */}
+              <span className={`text-xs tabular-nums font-semibold transition-all duration-100 ${
+                isActive
+                  ? 'text-gray-900 dark:text-white opacity-100'
+                  : 'opacity-0'
+              }`}>
+                {d.count}
               </span>
 
               {/* Bar */}
               <div className="w-full flex flex-col justify-end" style={{ height: '72px' }}>
                 <div
-                  className={`w-full rounded-t-md transition-all duration-200 ${
+                  className={`w-full rounded-t-md transition-colors duration-150 ${
                     isActive
-                      ? 'bg-gray-700 dark:bg-gray-200'
+                      ? 'bg-gray-500 dark:bg-gray-200'   // hover: dark grey (light) / near-white (dark)
                       : d.isToday
-                      ? 'bg-gray-900 dark:bg-white'
-                      : 'bg-gray-200 dark:bg-gray-600'
+                      ? 'bg-gray-400 dark:bg-gray-500'   // today: medium grey both modes
+                      : 'bg-gray-200 dark:bg-gray-700'   // default: light grey (light) / dark grey (dark)
                   }`}
                   style={{ height: `${barH}px` }}
                 />
               </div>
 
-              {/* Day label */}
-              <span className={`text-xs leading-none ${
-                d.isToday
-                  ? 'font-semibold text-gray-900 dark:text-white'
-                  : isActive
-                  ? 'text-gray-700 dark:text-gray-200'
+              {/* Day/week label */}
+              <span className={`text-xs leading-none transition-colors duration-150 ${
+                isActive
+                  ? 'font-semibold text-gray-800 dark:text-gray-100'
+                  : d.isToday
+                  ? 'font-semibold text-gray-600 dark:text-gray-300'
                   : 'text-gray-400 dark:text-gray-500'
               }`}>
                 {d.label}
@@ -202,9 +207,9 @@ function BarChart({ barData, rangeLabel }) {
         })}
       </div>
 
-      {/* Mobile hint */}
-      <p className="text-xs text-gray-300 dark:text-gray-700 text-center mt-3">
-        Tap a bar to see count
+      {/* Hint line */}
+      <p className="text-xs text-gray-300 dark:text-gray-600 text-center mt-3 select-none">
+        Hover or tap a bar to see count
       </p>
     </div>
   )

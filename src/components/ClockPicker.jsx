@@ -106,17 +106,37 @@ export default function ClockPicker({ value, onChange }) {
 
   const activePos = mode === 'hour' ? hourPos : minutePos
 
-  const css = [
-    '.clock-num{fill:#111827}',
-    '.clock-dot{fill:#374151}',
-    ':is(.dark) .clock-num{fill:#f9fafb}',
-    ':is(.dark) .clock-dot{fill:#d1d5db}',
-    '@media(prefers-color-scheme:dark){.clock-num{fill:#f9fafb}.clock-dot{fill:#d1d5db}}',
-  ].join('')
+  // Detect dark mode by reading computed color of a known Tailwind dark class on the wrapper
+  const wrapperRef = useRef(null)
+  const [isDark, setIsDark] = useState(false)
+
+  useEffect(() => {
+    const check = () => {
+      if (wrapperRef.current) {
+        // If document has .dark class (Tailwind) OR prefers-color-scheme: dark
+        const hasDarkClass = document.documentElement.classList.contains('dark')
+        const prefersDark  = window.matchMedia('(prefers-color-scheme: dark)').matches
+        setIsDark(hasDarkClass || prefersDark)
+      }
+    }
+    check()
+    const mq = window.matchMedia('(prefers-color-scheme: dark)')
+    mq.addEventListener('change', check)
+    const observer = new MutationObserver(check)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
+    return () => { mq.removeEventListener('change', check); observer.disconnect() }
+  }, [])
+
+  const numFill  = isDark ? '#ffffff' : '#111827'   // white in dark, black in light
+  const dotFill  = isDark ? '#d1d5db' : '#374151'   // light grey in dark, dark grey in light
+  const ringStroke = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'
+  const handStroke = isDark ? '#ffffff' : '#111827'
+  const centerFill = isDark ? '#ffffff' : '#111827'
+  const selCircle  = isDark ? '#ffffff' : '#111827'
+  const selText    = isDark ? '#111827' : '#ffffff'
 
   return (
-    <div className="select-none" style={{ userSelect: 'none' }}>
-      <style>{css}</style>
+    <div ref={wrapperRef} className="select-none" style={{ userSelect: 'none' }}>
       {/* Time display + AM/PM */}
       <div className="flex items-center justify-center gap-3 mb-4">
         <div className="flex items-baseline gap-1">
@@ -175,7 +195,7 @@ export default function ClockPicker({ value, onChange }) {
           onTouchEnd={onPointerUp}
         >
           {/* Clock background */}
-          <circle cx={CX} cy={CY} r={SIZE/2 - 4} fill="transparent" stroke="currentColor" strokeOpacity="0.15" strokeWidth="1.5"/>
+          <circle cx={CX} cy={CY} r={SIZE/2 - 4} fill="transparent" stroke={ringStroke} strokeWidth="1.5"/>
 
           {/* Hour numbers */}
           {mode === 'hour' && Array.from({ length: 12 }, (_, i) => {
@@ -184,10 +204,10 @@ export default function ClockPicker({ value, onChange }) {
             const sel = hour === h
             return (
               <g key={h}>
-                {sel && <circle cx={pos.x} cy={pos.y} r="14" fill="#111827" className="dark:fill-white"/>}
+                {sel && <circle cx={pos.x} cy={pos.y} r="14" fill={selCircle}/>}
                 <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
                   fontSize="13" fontWeight={sel ? '600' : '400'}
-                  className={sel ? '' : 'clock-num'} fill={sel ? 'white' : undefined} fillOpacity="1"
+                  fill={sel ? selText : numFill}
                   style={{ pointerEvents: 'none' }}>
                   {h}
                 </text>
@@ -203,10 +223,10 @@ export default function ClockPicker({ value, onChange }) {
             if (isLabel) {
               return (
                 <g key={m}>
-                  {sel && <circle cx={pos.x} cy={pos.y} r="13" fill="#111827" className="dark:fill-white"/>}
+                  {sel && <circle cx={pos.x} cy={pos.y} r="13" fill={selCircle}/>}
                   <text x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="central"
                     fontSize="11" fontWeight={sel ? '600' : '400'}
-                    className={sel ? '' : 'clock-num'} fill={sel ? 'white' : undefined} fillOpacity="1"
+                    fill={sel ? selText : numFill}
                     style={{ pointerEvents: 'none' }}>
                     {pad(m)}
                   </text>
@@ -216,9 +236,9 @@ export default function ClockPicker({ value, onChange }) {
             // Non-label minute: dot
             return (
               <g key={m}>
-                {sel && <circle cx={pos.x} cy={pos.y} r="10" fill="#111827" className="dark:fill-white"/>}
+                {sel && <circle cx={pos.x} cy={pos.y} r="10" fill={selCircle}/>}
                 <circle cx={pos.x} cy={pos.y} r={sel ? 2 : 1.5}
-                  className={sel ? '' : 'clock-dot'} fill={sel ? 'white' : undefined} fillOpacity="0.7"
+                  fill={sel ? selText : dotFill}
                   style={{ pointerEvents: 'none' }}/>
               </g>
             )
@@ -226,12 +246,11 @@ export default function ClockPicker({ value, onChange }) {
 
           {/* Hand line */}
           <line x1={CX} y1={CY} x2={activePos.x} y2={activePos.y}
-            stroke="#111827" strokeWidth="1.5" strokeLinecap="round"
-            className="dark:stroke-white" opacity="0.6"
+            stroke={handStroke} strokeWidth="1.5" strokeLinecap="round" opacity="0.5"
             style={{ pointerEvents: 'none' }}/>
 
           {/* Center dot */}
-          <circle cx={CX} cy={CY} r="3" fill="#111827" className="dark:fill-white" style={{ pointerEvents: 'none' }}/>
+          <circle cx={CX} cy={CY} r="3" fill={centerFill} style={{ pointerEvents: 'none' }}/>
         </svg>
       </div>
     </div>
