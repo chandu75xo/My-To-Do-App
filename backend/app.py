@@ -37,6 +37,10 @@ def run_migrations(app):
             f"ALTER TABLE tasks ADD COLUMN {ifn} overdue_email_last_date VARCHAR(10)",
             f"ALTER TABLE tasks ADD COLUMN {ifn} archived BOOLEAN NOT NULL DEFAULT {bf}",
             f"ALTER TABLE tasks ADD COLUMN {ifn} completed_at TIMESTAMP",
+            # Indexes — CREATE INDEX IF NOT EXISTS is safe to run repeatedly
+            "CREATE INDEX IF NOT EXISTS ix_tasks_user_archived     ON tasks (user_id, archived)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_user_completed_at ON tasks (user_id, completed_at)",
+            "CREATE INDEX IF NOT EXISTS ix_tasks_done_completed     ON tasks (done, completed_at)",
         ]
         conn = db.engine.raw_connection()
         try:

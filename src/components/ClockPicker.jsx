@@ -127,8 +127,8 @@ export default function ClockPicker({ value, onChange }) {
     return () => { mq.removeEventListener('change', check); observer.disconnect() }
   }, [])
 
-  const numFill  = isDark ? '#ffffff' : '#111827'   // white in dark, black in light
-  const dotFill  = isDark ? '#d1d5db' : '#374151'   // light grey in dark, dark grey in light
+  const numFill  = '#4B5563'   // gray-600 — readable on both light and dark clock face
+  const dotFill  = '#6B7280'   // gray-500 — slightly lighter for dots
   const ringStroke = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'
   const handStroke = isDark ? '#ffffff' : '#111827'
   const centerFill = isDark ? '#ffffff' : '#111827'

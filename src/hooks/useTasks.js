@@ -38,12 +38,9 @@ export function useTasks(user) {
 
   // Stable fetch — always gets latest from server
   const fetchAll = useCallback(async () => {
-    const [activeData, archivedData] = await Promise.all([
-      tasksApi.getAll(),
-      tasksApi.getArchived(),
-    ])
-    setTasks(activeData.tasks)
-    setArchivedTasks(archivedData.tasks)
+    const data = await tasksApi.getAllCombined()
+    setTasks(data.tasks)
+    setArchivedTasks(data.archived)
   }, [])
 
   useEffect(() => {

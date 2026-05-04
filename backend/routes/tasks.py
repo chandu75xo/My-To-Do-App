@@ -26,6 +26,19 @@ def _next_due_date(due_date_str, recurrence):
     return due_date_str
 
 
+@tasks_bp.route('/all', methods=['GET'])
+@jwt_required()
+def get_all_tasks():
+    """Returns active + archived tasks in one request — used by frontend for stats."""
+    user_id  = int(get_jwt_identity())
+    active   = Task.query.filter_by(user_id=user_id, archived=False).order_by(Task.created_at.desc()).all()
+    archived = Task.query.filter_by(user_id=user_id, archived=True).order_by(Task.completed_at.desc()).all()
+    return jsonify({
+        'tasks':    [t.to_dict() for t in active],
+        'archived': [t.to_dict() for t in archived],
+    }), 200
+
+
 @tasks_bp.route('/', methods=['GET'])
 @jwt_required()
 def get_tasks():

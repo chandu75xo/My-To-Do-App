@@ -55,8 +55,15 @@ class Task(db.Model):
     archived           = db.Column(db.Boolean, nullable=False, default=False)
     completed_at       = db.Column(db.DateTime, nullable=True, default=None)
     created_at         = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.Index('ix_tasks_user_archived',    'user_id', 'archived'),   # main list query
+        db.Index('ix_tasks_user_completed_at','user_id', 'completed_at'),  # archived/stats query
+        db.Index('ix_tasks_done_completed',   'done', 'completed_at'),  # cleanup job
+    )
+
     subtasks           = db.relationship('Subtask', backref='task', cascade='all, delete-orphan',
-                                         lazy=True, order_by='Subtask.created_at')
+                                         lazy='subquery', order_by='Subtask.created_at')
 
     def to_dict(self):
         return {
