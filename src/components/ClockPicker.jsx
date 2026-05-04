@@ -106,34 +106,16 @@ export default function ClockPicker({ value, onChange }) {
 
   const activePos = mode === 'hour' ? hourPos : minutePos
 
-  // Detect dark mode by reading computed color of a known Tailwind dark class on the wrapper
+  // Fixed colors — white clock face, black numbers, black selected circle, white selected text
+  // Same in both light and dark mode as requested
   const wrapperRef = useRef(null)
-  const [isDark, setIsDark] = useState(false)
-
-  useEffect(() => {
-    const check = () => {
-      if (wrapperRef.current) {
-        // If document has .dark class (Tailwind) OR prefers-color-scheme: dark
-        const hasDarkClass = document.documentElement.classList.contains('dark')
-        const prefersDark  = window.matchMedia('(prefers-color-scheme: dark)').matches
-        setIsDark(hasDarkClass || prefersDark)
-      }
-    }
-    check()
-    const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    mq.addEventListener('change', check)
-    const observer = new MutationObserver(check)
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] })
-    return () => { mq.removeEventListener('change', check); observer.disconnect() }
-  }, [])
-
-  const numFill  = '#4B5563'   // gray-600 — readable on both light and dark clock face
-  const dotFill  = '#6B7280'   // gray-500 — slightly lighter for dots
-  const ringStroke = isDark ? 'rgba(255,255,255,0.15)' : 'rgba(0,0,0,0.12)'
-  const handStroke = isDark ? '#ffffff' : '#111827'
-  const centerFill = isDark ? '#ffffff' : '#111827'
-  const selCircle  = isDark ? '#ffffff' : '#111827'
-  const selText    = isDark ? '#111827' : '#ffffff'
+  const numFill    = '#111827'   // near-black — unselected numbers
+  const dotFill    = '#374151'   // dark grey — unselected minute dots
+  const ringStroke = 'rgba(0,0,0,0.10)'
+  const handStroke = '#111827'
+  const centerFill = '#111827'
+  const selCircle  = '#111827'   // black selection circle
+  const selText    = '#ffffff'   // white text on selected
 
   return (
     <div ref={wrapperRef} className="select-none" style={{ userSelect: 'none' }}>
