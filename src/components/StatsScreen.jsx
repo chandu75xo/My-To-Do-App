@@ -1,7 +1,7 @@
-// StatsScreen.jsx — v10
-// This Week  : 7 bars, Sun–Sat, full day names, hover shows count + DD/MM
-// This Month : week-grouped rows (Week 1…N), each row = Sun–Sat, same hover
-// Last Month : same week-grouped rows as This Month
+// StatsScreen.jsx — v11
+// This Week  : single week block, 7 bars Sun–Sat, hover shows count + DD/MM
+// This Month : N week blocks (same as This Week), out-of-month days = locked grey bars
+// Last Month : same as This Month
 
 import { useState } from 'react'
 
@@ -23,7 +23,9 @@ const RANGES = [
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function toDS(d) { return d.toISOString().split('T')[0] }
+function toDS(d) {
+  return d.toISOString().split('T')[0]
+}
 
 function getRangeBounds(id) {
   const now = new Date()
@@ -37,7 +39,6 @@ function getRangeBounds(id) {
     const e = new Date(now.getFullYear(), now.getMonth() + 1, 0); e.setHours(23,59,59,999)
     return { start: s, end: e }
   }
-  // last_month
   const s = new Date(now.getFullYear(), now.getMonth() - 1, 1)
   const e = new Date(now.getFullYear(), now.getMonth(), 0); e.setHours(23,59,59,999)
   return { start: s, end: e }
@@ -63,8 +64,7 @@ function computeStreak(tasks) {
   return streak
 }
 
-// Build a count map: dateStr → number of completed tasks
-function countMap(tasks) {
+function buildCountMap(tasks) {
   const map = {}
   tasks.forEach(t => {
     if (!(t.done || t.archived)) return
@@ -75,56 +75,44 @@ function countMap(tasks) {
   return map
 }
 
-// For This Week: 7 day objects Sun–Sat
-function buildWeekDays(tasks, start) {
-  const cm    = countMap(tasks)
-  const today = toDS(new Date())
-  return Array.from({ length: 7 }, (_, i) => {
-    const d  = new Date(start); d.setDate(start.getDate() + i)
-    const ds = toDS(d)
-    return {
-      dayName: DAY_NAMES[d.getDay()],
-      dateStr: ds,
-      ddmm:    `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`,
-      isToday: ds === today,
-      inRange: true,
-      count:   cm[ds] || 0,
-    }
-  })
+function ddmm(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00')
+  return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`
 }
 
-// For This Month / Last Month: split into week rows (Sun–Sat)
-// Days outside the month are inRange=false (blank bars)
-function buildMonthWeeks(tasks, start, end) {
-  const cm    = countMap(tasks)
+// Build week blocks. Each block = 7 days Sun–Sat.
+// For This Week: one block, all 7 days inRange=true
+// For month ranges: N blocks where days outside [start,end] have inRange=false (locked)
+function buildWeekBlocks(tasks, start, end) {
+  const cm    = buildCountMap(tasks)
   const today = toDS(new Date())
 
-  // Anchor to the Sunday on/before the 1st of month
+  // Anchor to Sunday on or before start
   const anchor = new Date(start)
   anchor.setDate(anchor.getDate() - anchor.getDay())
   anchor.setHours(0,0,0,0)
 
-  const weeks = []
+  const blocks = []
   const cursor = new Date(anchor)
 
   while (cursor <= end) {
     const days = Array.from({ length: 7 }, (_, i) => {
-      const d      = new Date(cursor); d.setDate(cursor.getDate() + i)
-      const ds     = toDS(d)
+      const d       = new Date(cursor); d.setDate(cursor.getDate() + i)
+      const ds      = toDS(d)
       const inRange = d >= start && d <= end
       return {
         dayName: DAY_NAMES[d.getDay()],
         dateStr: ds,
-        ddmm:    `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`,
+        ddmm:    ddmm(ds),
         isToday: ds === today,
         inRange,
         count:   inRange ? (cm[ds] || 0) : 0,
       }
     })
-    weeks.push(days)
+    blocks.push(days)
     cursor.setDate(cursor.getDate() + 7)
   }
-  return weeks
+  return blocks
 }
 
 // ── icons ──────────────────────────────────────────────────────────────────
@@ -146,44 +134,51 @@ const ICONS = {
   total:  'M9 5H7a2 2 0 00-2 2v8a2 2 0 002 2h6a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h0a2 2 0 002-2M9 5a2 2 0 012-2h0a2 2 0 012 2',
 }
 
-// ── WeekRow: one row of 7 bars (Sun–Sat) ──────────────────────────────────
+// ── WeekBlock: one dedicated card per week ─────────────────────────────────
 
-function WeekRow({ days, weekLabel, maxCount }) {
+const BAR_MAX_H = 56  // px — max bar height inside card
+
+function WeekBlock({ days, label, maxCount, isOnlyBlock }) {
   const [activeIdx, setActiveIdx] = useState(null)
-  const BAR_H = 52  // fixed max bar height px
+  const max = Math.max(maxCount, 1)
 
   return (
-    <div className="flex items-start gap-2">
-      {/* Week label — fixed width so bars always align */}
-      {weekLabel !== undefined && (
-        <div className="flex-shrink-0 w-14 pt-1">
-          <span className="text-xs font-medium text-gray-400 dark:text-gray-500 whitespace-nowrap">
-            {weekLabel}
-          </span>
-        </div>
+    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-4">
+      {/* Week label — only shown when there are multiple blocks */}
+      {label && (
+        <p className="text-xs font-medium text-gray-400 dark:text-gray-500 mb-3">{label}</p>
       )}
 
-      {/* 7 bars */}
-      <div className="flex gap-1 flex-1 min-w-0">
+      <div className="flex gap-1">
         {days.map((day, i) => {
-          const isActive = activeIdx === i
-          const barH = day.inRange
-            ? Math.max((day.count / Math.max(maxCount, 1)) * BAR_H, day.count > 0 ? 6 : 2)
-            : 2
+          const isActive  = activeIdx === i
+          const locked    = !day.inRange   // out-of-month day — fully locked
+          const barH      = locked ? 3
+            : Math.max((day.count / max) * BAR_MAX_H, day.count > 0 ? 6 : 2)
 
           return (
             <div
               key={i}
-              className="flex flex-col items-center select-none cursor-pointer"
-              style={{ flex: '1 1 0', minWidth: 0 }}
-              onMouseEnter={() => day.inRange && setActiveIdx(i)}
+              className="flex flex-col items-center select-none"
+              style={{
+                flex: '1 1 0',
+                minWidth: 0,
+                cursor: locked ? 'default' : 'pointer',
+                pointerEvents: locked ? 'none' : 'auto',
+              }}
+              onMouseEnter={() => !locked && setActiveIdx(i)}
               onMouseLeave={() => setActiveIdx(null)}
-              onTouchStart={(e) => { e.preventDefault(); setActiveIdx(p => p === i ? null : i) }}
+              onTouchStart={(e) => {
+                if (locked) return
+                e.preventDefault()
+                setActiveIdx(p => p === i ? null : i)
+              }}
             >
-              {/* Count + DD/MM tooltip — only when active and has count */}
-              <div className={`flex flex-col items-center transition-opacity duration-100 ${
-                isActive && day.inRange && day.count > 0 ? 'opacity-100' : 'opacity-0'
-              }`} style={{ minHeight: '28px' }}>
+              {/* Tooltip: count + DD/MM — only when active and has data */}
+              <div
+                className="flex flex-col items-center transition-opacity duration-100"
+                style={{ minHeight: '30px', opacity: isActive && !locked && day.count > 0 ? 1 : 0 }}
+              >
                 <span className="text-xs font-bold tabular-nums text-gray-900 dark:text-white leading-none">
                   {day.count}
                 </span>
@@ -193,31 +188,34 @@ function WeekRow({ days, weekLabel, maxCount }) {
               </div>
 
               {/* Bar */}
-              <div className="w-full flex flex-col justify-end" style={{ height: `${BAR_H}px` }}>
+              <div className="w-full flex flex-col justify-end" style={{ height: `${BAR_MAX_H}px` }}>
                 <div
                   className={`w-full rounded-t transition-colors duration-150 ${
-                    !day.inRange
-                      ? 'bg-gray-100 dark:bg-gray-800'
+                    locked
+                      ? 'bg-gray-100 dark:bg-gray-700 opacity-40'   // locked: greyed out, no hover
                       : isActive
-                      ? 'bg-gray-500 dark:bg-gray-300'
+                      ? 'bg-gray-500 dark:bg-gray-300'              // hover: darker/lighter
                       : day.isToday
-                      ? 'bg-gray-400 dark:bg-gray-500'
-                      : 'bg-gray-200 dark:bg-gray-700'
+                      ? 'bg-gray-400 dark:bg-gray-500'              // today: medium
+                      : 'bg-gray-200 dark:bg-gray-700'              // default
                   }`}
                   style={{ height: `${barH}px` }}
                 />
               </div>
 
               {/* Day name */}
-              <span className={`leading-none mt-1 transition-colors duration-150 ${
-                !day.inRange
-                  ? 'text-gray-200 dark:text-gray-800'
-                  : isActive
-                  ? 'font-semibold text-gray-700 dark:text-gray-200'
-                  : day.isToday
-                  ? 'font-semibold text-gray-500 dark:text-gray-300'
-                  : 'text-gray-400 dark:text-gray-500'
-              }`} style={{ fontSize: '10px' }}>
+              <span
+                className={`leading-none mt-1 transition-colors duration-150 ${
+                  locked
+                    ? 'text-gray-200 dark:text-gray-700'
+                    : isActive
+                    ? 'font-semibold text-gray-700 dark:text-gray-200'
+                    : day.isToday
+                    ? 'font-semibold text-gray-500 dark:text-gray-300'
+                    : 'text-gray-400 dark:text-gray-500'
+                }`}
+                style={{ fontSize: '10px' }}
+              >
                 {day.dayName}
               </span>
             </div>
@@ -228,28 +226,13 @@ function WeekRow({ days, weekLabel, maxCount }) {
   )
 }
 
-// ── SingleWeekChart: This Week (no week label) ────────────────────────────
+// ── WeekBlocksChart: wraps all week blocks in a card ──────────────────────
 
-function SingleWeekChart({ days }) {
-  const maxCount = Math.max(...days.map(d => d.count), 1)
-  return (
-    <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <span className="text-gray-400 dark:text-gray-500"><Icon path={ICONS.chart} size={16}/></span>
-        <p className="text-sm font-medium text-gray-700 dark:text-gray-300">This Week Activity</p>
-      </div>
-      <WeekRow days={days} maxCount={maxCount} />
-      <p className="text-xs text-gray-300 dark:text-gray-600 text-center mt-3 select-none">
-        Hover or tap a bar to see count
-      </p>
-    </div>
-  )
-}
+function WeekBlocksChart({ blocks, rangeLabel }) {
+  // Global max across all blocks so bar heights are comparable
+  const maxCount = Math.max(...blocks.flatMap(b => b.map(d => d.count)), 1)
+  const multi    = blocks.length > 1
 
-// ── MultiWeekChart: This Month / Last Month ───────────────────────────────
-
-function MultiWeekChart({ weeks, rangeLabel }) {
-  const maxCount = Math.max(...weeks.flatMap(w => w.map(d => d.count)), 1)
   return (
     <div className="bg-white dark:bg-gray-800 rounded-2xl border border-gray-100 dark:border-gray-700 p-5">
       <div className="flex items-center gap-2 mb-4">
@@ -257,13 +240,14 @@ function MultiWeekChart({ weeks, rangeLabel }) {
         <p className="text-sm font-medium text-gray-700 dark:text-gray-300">{rangeLabel} Activity</p>
       </div>
 
-      <div className="flex flex-col gap-4">
-        {weeks.map((days, wi) => (
-          <WeekRow
+      <div className="flex flex-col gap-3">
+        {blocks.map((days, wi) => (
+          <WeekBlock
             key={wi}
             days={days}
-            weekLabel={`Week ${wi + 1}`}
+            label={multi ? `Week ${wi + 1}` : undefined}
             maxCount={maxCount}
+            isOnlyBlock={!multi}
           />
         ))}
       </div>
@@ -301,17 +285,12 @@ export default function StatsScreen({ tasks, onClose }) {
     return d && toDS(d) === toDS(new Date())
   }).length
 
-  // Chart data
-  const isWeek   = range === 'this_week'
-  const weekDays  = isWeek ? buildWeekDays(tasks, start) : null
-  const monthWeeks = !isWeek ? buildMonthWeeks(tasks, start, end) : null
+  const weekBlocks = buildWeekBlocks(tasks, start, end)
 
-  // Tag breakdown
   const tagCounts = {}
   inRange.forEach(t => { tagCounts[t.tag] = (tagCounts[t.tag] || 0) + 1 })
   const tagEntries = Object.entries(tagCounts).sort((a,b) => b[1]-a[1])
 
-  // Best day
   const dayTotals = Array(7).fill(0)
   inRange.filter(t => taskDate(t)).forEach(t => { dayTotals[taskDate(t).getDay()]++ })
   const bestDay = DAY_NAMES[dayTotals.indexOf(Math.max(...dayTotals))]
@@ -382,11 +361,8 @@ export default function StatsScreen({ tasks, onClose }) {
           </div>
         )}
 
-        {/* Chart */}
-        {isWeek
-          ? <SingleWeekChart days={weekDays} />
-          : <MultiWeekChart  weeks={monthWeeks} rangeLabel={rangeLabel} />
-        }
+        {/* Week blocks chart */}
+        <WeekBlocksChart blocks={weekBlocks} rangeLabel={rangeLabel} />
 
         {/* Tag breakdown */}
         {tagEntries.length > 0 && (

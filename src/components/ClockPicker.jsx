@@ -119,20 +119,42 @@ export default function ClockPicker({ value, onChange }) {
 
   return (
     <div ref={wrapperRef} className="select-none" style={{ userSelect: 'none' }}>
-      {/* Time display + AM/PM */}
+      {/* Time display + AM/PM — inputs open numeric keypad on mobile */}
       <div className="flex items-center justify-center gap-3 mb-4">
         <div className="flex items-baseline gap-1">
-          <button
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={2}
+            value={pad(hour)}
+            onFocus={() => setMode('hour')}
             onClick={() => setMode('hour')}
-            className={`text-3xl font-mono font-medium transition-colors ${mode === 'hour' ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-            {pad(hour)}
-          </button>
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              if (!isNaN(v) && v >= 1 && v <= 12) setHour(v)
+            }}
+            className={`w-12 text-center text-3xl font-mono font-medium bg-transparent border-none outline-none transition-colors ${
+              mode === 'hour' ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+            }`}
+          />
           <span className="text-3xl font-mono text-gray-300 dark:text-gray-600">:</span>
-          <button
+          <input
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            maxLength={2}
+            value={pad(minute)}
+            onFocus={() => setMode('minute')}
             onClick={() => setMode('minute')}
-            className={`text-3xl font-mono font-medium transition-colors ${mode === 'minute' ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'}`}>
-            {pad(minute)}
-          </button>
+            onChange={(e) => {
+              const v = parseInt(e.target.value, 10)
+              if (!isNaN(v) && v >= 0 && v <= 59) setMinute(v)
+            }}
+            className={`w-12 text-center text-3xl font-mono font-medium bg-transparent border-none outline-none transition-colors ${
+              mode === 'minute' ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+            }`}
+          />
         </div>
         {/* AM/PM */}
         <div className="flex flex-col gap-1">
@@ -176,8 +198,8 @@ export default function ClockPicker({ value, onChange }) {
           onTouchMove={onPointerMove}
           onTouchEnd={onPointerUp}
         >
-          {/* Clock background */}
-          <circle cx={CX} cy={CY} r={SIZE/2 - 4} fill="transparent" stroke={ringStroke} strokeWidth="1.5"/>
+          {/* Clock background — always white so numbers are always readable */}
+          <circle cx={CX} cy={CY} r={SIZE/2 - 4} fill="white" stroke={ringStroke} strokeWidth="1.5"/>
 
           {/* Hour numbers */}
           {mode === 'hour' && Array.from({ length: 12 }, (_, i) => {
