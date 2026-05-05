@@ -5,7 +5,7 @@
 // - AM/PM toggle
 // - Smooth drag interaction on both rings
 
-import { useState, useRef, useCallback, useEffect } from 'react'
+import { useState, useRef, useCallback, useEffect, useReducer } from 'react'
 
 const SIZE   = 220
 const CX     = SIZE / 2
@@ -30,6 +30,49 @@ function pad(n) { return String(n).padStart(2, '0') }
 
 // Show minute labels every 5 mins, dots for others
 const MINUTE_LABELS = [0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55]
+
+// DraftInput — controlled display, free typing, commits on blur or Enter
+function DraftInput({ displayValue, mode, activeMode, onActivate, onCommit }) {
+  const [draft, setDraft] = useState(null)  // null = not editing
+  const inputRef = useRef(null)
+  const isActive = mode === activeMode
+
+  const startEdit = () => {
+    onActivate()
+    setDraft(displayValue)
+    setTimeout(() => inputRef.current?.select(), 0)
+  }
+
+  const commit = (val) => {
+    const raw = val ?? draft
+    if (raw !== null) {
+      onCommit(raw)
+      setDraft(null)
+    }
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      inputMode="numeric"
+      pattern="[0-9]*"
+      maxLength={2}
+      value={draft !== null ? draft : displayValue}
+      onFocus={startEdit}
+      onClick={startEdit}
+      onChange={(e) => setDraft(e.target.value.replace(/[^0-9]/g, ''))}
+      onBlur={() => commit(null)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { commit(null); inputRef.current?.blur() }
+        if (e.key === 'Escape') { setDraft(null); inputRef.current?.blur() }
+      }}
+      className={`w-12 text-center text-3xl font-mono font-medium bg-transparent border-none outline-none transition-colors cursor-text ${
+        isActive ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
+      }`}
+    />
+  )
+}
 
 export default function ClockPicker({ value, onChange }) {
   // Parse initial value or default to current time
@@ -119,41 +162,31 @@ export default function ClockPicker({ value, onChange }) {
 
   return (
     <div ref={wrapperRef} className="select-none" style={{ userSelect: 'none' }}>
-      {/* Time display + AM/PM — inputs open numeric keypad on mobile */}
+      {/* Time display + AM/PM
+           Draft inputs: user types freely; value commits on blur or Enter.
+           inputMode="numeric" opens number pad on mobile. */}
       <div className="flex items-center justify-center gap-3 mb-4">
         <div className="flex items-baseline gap-1">
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={2}
-            value={pad(hour)}
-            onFocus={() => setMode('hour')}
-            onClick={() => setMode('hour')}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10)
+          <DraftInput
+            displayValue={pad(hour)}
+            mode="hour"
+            activeMode={mode}
+            onActivate={() => setMode('hour')}
+            onCommit={(raw) => {
+              const v = parseInt(raw, 10)
               if (!isNaN(v) && v >= 1 && v <= 12) setHour(v)
             }}
-            className={`w-12 text-center text-3xl font-mono font-medium bg-transparent border-none outline-none transition-colors ${
-              mode === 'hour' ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
-            }`}
           />
           <span className="text-3xl font-mono text-gray-300 dark:text-gray-600">:</span>
-          <input
-            type="text"
-            inputMode="numeric"
-            pattern="[0-9]*"
-            maxLength={2}
-            value={pad(minute)}
-            onFocus={() => setMode('minute')}
-            onClick={() => setMode('minute')}
-            onChange={(e) => {
-              const v = parseInt(e.target.value, 10)
+          <DraftInput
+            displayValue={pad(minute)}
+            mode="minute"
+            activeMode={mode}
+            onActivate={() => setMode('minute')}
+            onCommit={(raw) => {
+              const v = parseInt(raw, 10)
               if (!isNaN(v) && v >= 0 && v <= 59) setMinute(v)
             }}
-            className={`w-12 text-center text-3xl font-mono font-medium bg-transparent border-none outline-none transition-colors ${
-              mode === 'minute' ? 'text-gray-900 dark:text-white' : 'text-gray-400 dark:text-gray-500'
-            }`}
           />
         </div>
         {/* AM/PM */}
