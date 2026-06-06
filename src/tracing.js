@@ -14,7 +14,7 @@ const GRAFANA_INSTANCE_ID = '1629463';
 const GRAFANA_TOKEN = import.meta.env.VITE_GRAFANA_TOKEN;
 
 const exporter = new OTLPTraceExporter({
-  url: 'https://tempo-prod-19-prod-ap-south-1.grafana.net/tempo/v1/traces',
+  url: 'https://tempo-prod-19-prod-ap-south-1.grafana.net/v1/traces',,
   headers: {
     Authorization: 'Basic ' + btoa(`${GRAFANA_INSTANCE_ID}:${GRAFANA_TOKEN}`),
   },
