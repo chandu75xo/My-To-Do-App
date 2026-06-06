@@ -9,21 +9,25 @@ import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { ZoneContextManager } from '@opentelemetry/context-zone';
 import { registerInstrumentations } from '@opentelemetry/instrumentation';
 import { getWebAutoInstrumentations } from '@opentelemetry/auto-instrumentations-web';
-import { Resource } from '@opentelemetry/resources';
-import { SEMRESATTRS_SERVICE_NAME, SEMRESATTRS_SERVICE_VERSION } from '@opentelemetry/semantic-conventions';
 
-// ── Trace exporter → your Alloy on Tailscale ──────────────
+const GRAFANA_INSTANCE_ID = '1629463';
+const GRAFANA_TOKEN = import.meta.env.VITE_GRAFANA_TOKEN;
+
 const exporter = new OTLPTraceExporter({
-  url: 'http://100.91.128.68:4321/v1/traces',
+  url: 'https://tempo-prod-19-prod-ap-south-1.grafana.net/tempo/v1/traces',
+  headers: {
+    Authorization: 'Basic ' + btoa(`${GRAFANA_INSTANCE_ID}:${GRAFANA_TOKEN}`),
+  },
 });
 
-// ── Provider with service metadata ────────────────────────
 const provider = new WebTracerProvider({
-  resource: new Resource({
-    [SEMRESATTRS_SERVICE_NAME]: 'done-todoapp-frontend',
-    [SEMRESATTRS_SERVICE_VERSION]: '1.0.0',
-    'deployment.environment': 'production',
-  }),
+  resource: {
+    attributes: {
+      'service.name': 'done-todoapp-frontend',
+      'service.version': '1.0.0',
+      'deployment.environment': 'production',
+    },
+  },
   spanProcessors: [new BatchSpanProcessor(exporter)],
 });
 
@@ -31,14 +35,12 @@ provider.register({
   contextManager: new ZoneContextManager(),
 });
 
-// ── Auto-instrument fetch, XHR, page load, user clicks ────
 registerInstrumentations({
   instrumentations: [
     getWebAutoInstrumentations({
       '@opentelemetry/instrumentation-fetch': {
         enabled: true,
         propagateTraceHeaderCorsUrls: [
-          // Add your Render backend URL here so trace IDs link frontend → backend
           /https:\/\/.*\.onrender\.com/,
         ],
       },
