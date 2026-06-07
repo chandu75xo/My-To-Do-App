@@ -9,7 +9,7 @@ const GRAFANA_INSTANCE_ID = '1677375';
 const GRAFANA_TOKEN = import.meta.env.VITE_GRAFANA_TOKEN;
 
 const exporter = new OTLPTraceExporter({
-  url: 'https://otlp-gateway-prod-ap-south-1.grafana.net/otlp/v1/traces',
+  url: 'https://otlp-gateway-prod-ap-south-1.grafana.net/otlp',
   headers: {
     Authorization: 'Basic ' + btoa(`${GRAFANA_INSTANCE_ID}:${GRAFANA_TOKEN}`),
   },
