@@ -1,55 +1,24 @@
-import { WebTracerProvider } from '@opentelemetry/sdk-trace-web';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
-import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
-import { ZoneContextManager } from '@opentelemetry/context-zone';
-import { registerInstrumentations } from '@opentelemetry/instrumentation';
-import { getWebAutoInstrumentations } from '@opentelemetry/auto-instrumentations-web';
+// ============================================================
+// Grafana Faro — done-todoapp frontend
+// Add "import './tracing'" as the FIRST line in src/main.jsx
+// Faro key is public-safe, no need for env vars
+// ============================================================
 
-const GRAFANA_INSTANCE_ID = '1677375';
-const GRAFANA_TOKEN = import.meta.env.VITE_GRAFANA_TOKEN;
+import { initializeFaro, getWebInstrumentations } from "@grafana/faro-web-sdk";
+import { TracingInstrumentation } from "@grafana/faro-web-tracing";
 
-const exporter = new OTLPTraceExporter({
-  url: 'https://otlp-gateway-prod-ap-south-1.grafana.net/otlp',
-  headers: {
-    Authorization: 'Basic ' + btoa(`${GRAFANA_INSTANCE_ID}:${GRAFANA_TOKEN}`),
+initializeFaro({
+  url: "https://faro-collector-prod-ap-south-1.grafana.net/collect/507dc396572937a73cde42db766b8a94",
+  app: {
+    name: "done-todoapp-frontend",
+    version: "1.0.0",
+    environment: "production",
   },
-});
-
-const provider = new WebTracerProvider({
-  resource: {
-    attributes: {
-      'service.name': 'done-todoapp-frontend',
-      'service.version': '1.0.0',
-      'deployment.environment': 'production',
-    },
-  },
-  spanProcessors: [new BatchSpanProcessor(exporter)],
-});
-
-provider.register({
-  contextManager: new ZoneContextManager(),
-});
-
-registerInstrumentations({
   instrumentations: [
-    getWebAutoInstrumentations({
-      '@opentelemetry/instrumentation-fetch': {
-        enabled: true,
-        propagateTraceHeaderCorsUrls: [
-          /https:\/\/.*\.onrender\.com/,
-        ],
-      },
-      '@opentelemetry/instrumentation-xml-http-request': {
-        enabled: true,
-        propagateTraceHeaderCorsUrls: [/https:\/\/.*\.onrender\.com/],
-      },
-      '@opentelemetry/instrumentation-document-load': { enabled: true },
-      '@opentelemetry/instrumentation-user-interaction': {
-        enabled: true,
-        eventNames: ['click', 'submit', 'change'],
-      },
+    ...getWebInstrumentations({
+      captureConsole: true,
+      captureConsoleDisabledLevels: [],
     }),
+    new TracingInstrumentation(),
   ],
 });
-
-console.debug('[OTEL] Browser tracing initialised → done-todoapp-frontend');
