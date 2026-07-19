@@ -65,6 +65,7 @@ def create_app():
     JWTManager(app)
 
     origins = [o for o in ['http://localhost:5173','http://localhost:4173',
+                             'https://localhost', 'capacitor://localhost',
                              os.getenv('FRONTEND_URL', '')] if o]
     CORS(app, origins=origins, supports_credentials=True)
 
